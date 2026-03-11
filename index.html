@@ -234,6 +234,7 @@ const headingBuf=[];  // buffer mediana bussola
 const HEADING_BUF_SIZE=12; // ultimi 12 campioni (~200ms a 60fps)
 let smoothFriendPos={}; // target GPS filtrato
 let displayFriendPos={}; // posizione visiva animata per-frame
+let trackedFriendId=null; // amico selezionato per tracking
 
 // ══════════════════════════════════
 // UTILS
@@ -362,21 +363,37 @@ window.addEventListener('resize',()=>{setTimeout(fixCanvas,100)});
 window.addEventListener('orientationchange',()=>{setTimeout(fixCanvas,300)});
 
 // Tap sul canvas: se vicino al centro (dot IO) → aggiorna GPS subito
+function handleRadarTap(tx,ty){
+  const cx=cv.clientWidth/2, cy=cv.clientHeight/2;
+  // Tap sul dot IO → aggiorna GPS
+  if(Math.sqrt((tx-cx)**2+(ty-cy)**2)<28){forceGpsUpdate();return;}
+  // Tap su un dot amico → attiva/disattiva tracking
+  let nearest=null, nearestDist=30; // soglia 30px
+  Object.values(friends).forEach(f=>{
+    if(f._fx===undefined)return;
+    const d=Math.sqrt((tx-f._fx)**2+(ty-f._fy)**2);
+    if(d<nearestDist){nearestDist=d;nearest=f;}
+  });
+  if(nearest){
+    if(trackedFriendId===nearest.id){
+      trackedFriendId=null;showToast('🎯 Tracking disattivato');
+    } else {
+      trackedFriendId=nearest.id;
+      showToast('🎯 Seguendo '+nearest.name);
+    }
+  } else {
+    // Tap su area vuota → cancella tracking
+    if(trackedFriendId){trackedFriendId=null;showToast('🎯 Tracking disattivato');}
+  }
+}
 cv.addEventListener('click',e=>{
-  const rect=cv.getBoundingClientRect();
-  const tx=e.clientX-rect.left,ty=e.clientY-rect.top;
-  const cx=cv.width/2,cy=cv.height/2;
-  const dist=Math.sqrt((tx-cx)**2+(ty-cy)**2);
-  if(dist<28) forceGpsUpdate(); // raggio di tap ~28px intorno al dot Io
+  const r=cv.getBoundingClientRect();
+  handleRadarTap(e.clientX-r.left,e.clientY-r.top);
 });
 cv.addEventListener('touchend',e=>{
   if(e.changedTouches.length!==1)return;
-  const rect=cv.getBoundingClientRect();
-  const t=e.changedTouches[0];
-  const tx=t.clientX-rect.left,ty=t.clientY-rect.top;
-  const cx=cv.width/2,cy=cv.height/2;
-  const dist=Math.sqrt((tx-cx)**2+(ty-cy)**2);
-  if(dist<28) forceGpsUpdate();
+  const r=cv.getBoundingClientRect(),t=e.changedTouches[0];
+  handleRadarTap(t.clientX-r.left,t.clientY-r.top);
 },{passive:true});
 
 // ══════════════════════════════════
@@ -514,23 +531,43 @@ function draw(){
   ctx.fillStyle='#ffffff33';ctx.font='9px sans-serif';ctx.fillText('tocca',cx,cy+22);
   ctx.textAlign='left';
 
-  // Bussola (piccola, angolo in alto a destra, non disturba il radar)
-  if(compassActive){
-    const bx=W-34, by=34, br=20;
-    ctx.beginPath();ctx.arc(bx,by,br,0,Math.PI*2);
-    ctx.fillStyle='rgba(2,4,18,0.88)';ctx.fill();
-    ctx.strokeStyle='#2a4455';ctx.lineWidth=1.5;ctx.stroke();
-    ctx.save();ctx.translate(bx,by);ctx.rotate(-d2r(displayHeading));
-    ctx.beginPath();ctx.moveTo(0,-(br-4));ctx.lineTo(-4,4);ctx.lineTo(4,4);ctx.closePath();
-    ctx.fillStyle='#ff4444';ctx.fill();
-    ctx.beginPath();ctx.moveTo(0,(br-4));ctx.lineTo(-4,-4);ctx.lineTo(4,-4);ctx.closePath();
-    ctx.fillStyle='#667788';ctx.fill();
-    ctx.restore();
-    ctx.fillStyle='#ff444488';ctx.font='bold 8px sans-serif';ctx.textAlign='center';
-    ctx.fillText('N',bx,by-br-2);
-    ctx.fillStyle='#ffa040aa';ctx.font='8px sans-serif';
-    ctx.fillText(Math.round(displayHeading)+'°',bx,by+br+9);
-    ctx.textAlign='left';
+  // ── Freccia N fissa in cima (Nord sempre in alto) ──
+  ctx.save();
+  ctx.translate(cx, cy-R+2);
+  ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(-6,5);ctx.lineTo(6,5);ctx.closePath();
+  ctx.fillStyle='#ffa040';ctx.shadowColor='#ffa040';ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;
+  ctx.fillStyle='#fff';ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('N',0,-1);ctx.textBaseline='alphabetic';
+  ctx.restore();
+
+  // ── Freccia tracking amico selezionato ──
+  if(trackedFriendId&&friends[trackedFriendId]&&myLat!=null){
+    const tf=friends[trackedFriendId];
+    const sp=displayFriendPos[trackedFriendId]||{lat:tf.lat,lon:tf.lon};
+    if(sp&&sp.lat!=null){
+      const{dist:td,bearing:tb}=distBear(myLat,myLon,sp.lat,sp.lon);
+      const ar=d2r(tb)-Math.PI/2;
+      const tCol=tf.color||'#00c0ff';
+      // Arco colorato sul bordo ±25°
+      ctx.beginPath();ctx.arc(cx,cy,R,ar-0.44,ar+0.44);
+      ctx.strokeStyle=tCol+'88';ctx.lineWidth=5;ctx.stroke();
+      // Triangolo freccia
+      const ax=cx+(R+2)*Math.cos(ar), ay=cy+(R+2)*Math.sin(ar);
+      ctx.save();ctx.translate(ax,ay);ctx.rotate(ar+Math.PI/2);
+      ctx.beginPath();ctx.moveTo(0,-11);ctx.lineTo(-7,5);ctx.lineTo(7,5);ctx.closePath();
+      ctx.fillStyle=tCol;ctx.shadowColor=tCol;ctx.shadowBlur=16;ctx.fill();ctx.shadowBlur=0;
+      ctx.restore();
+      // Iniziale nome sulla freccia
+      ctx.fillStyle='#000';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText((tf.name||'?')[0].toUpperCase(),ax,ay);ctx.textBaseline='alphabetic';
+      // Distanza sotto la freccia
+      const ds=td<1000?Math.round(td)+'m':(td/1000).toFixed(1)+'km';
+      const lx=cx+(R+22)*Math.cos(ar), ly=cy+(R+22)*Math.sin(ar);
+      ctx.fillStyle=tCol;ctx.font='bold 10px sans-serif';
+      ctx.textAlign=lx>cx?'left':'right';
+      ctx.fillText(ds,lx+(lx>cx?4:-4),ly+4);
+      ctx.textAlign='left';
+    }
   }
 
   // Bordo radar
@@ -958,7 +995,7 @@ function shareWA(){
 }
 function copyLink(){const url=getUrl();if(!url){showToast('⚠️ Serve HTTPS');return;}navigator.clipboard?.writeText(url);showToast('🔗 Link copiato!');}
 function copyCode(){navigator.clipboard?.writeText(groupId);showToast('📋 Codice: '+groupId);}
-function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsInterval)clearInterval(gpsInterval);gpsInterval=null;removeMQTT();friends={};predMap={};smoothFriendPos={};displayFriendPos={};show('s-landing');groupId=null;}
+function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsInterval)clearInterval(gpsInterval);gpsInterval=null;removeMQTT();friends={};predMap={};smoothFriendPos={};displayFriendPos={};trackedFriendId=null;show('s-landing');groupId=null;}
 
 // ══════════════════════════════════
 // TOAST
