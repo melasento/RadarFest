@@ -370,7 +370,7 @@ function handleRadarTap(tx,ty){
   if(Math.sqrt((tx-cx)**2+(ty-cy)**2)<28){forceGpsUpdate();return;}
   // Unrotate tap: porta coordinate schermo → spazio ruotato del canvas
   if(compassActive){
-    const θ=d2r(compassHeading), c=Math.cos(θ), s=Math.sin(θ);
+    const rot=d2r(compassHeading), c=Math.cos(rot), s=Math.sin(rot);
     const dx=tx-cx, dy=ty-cy;
     tx=cx+dx*c-dy*s; ty=cy+dx*s+dy*c;
   }
@@ -416,12 +416,12 @@ function draw(){
   ctx.clearRect(0,0,W,H);
 
   // Angolo di rotazione bussola (0 se inattiva)
-  const θ=compassActive?d2r(compassHeading):0;
-  const cosT=Math.cos(θ), sinT=Math.sin(θ);
+  const rot=compassActive?d2r(compassHeading):0;
+  const cosT=Math.cos(rot), sinT=Math.sin(rot);
 
   // ══ RADAR ROTANTE — tutto dentro ruota con la bussola ══
   ctx.save();
-  ctx.translate(cx,cy); ctx.rotate(-θ); ctx.translate(-cx,-cy);
+  ctx.translate(cx,cy); ctx.rotate(-rot); ctx.translate(-cx,-cy);
   ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.clip();
 
   // Sfondo
@@ -430,7 +430,7 @@ function draw(){
   ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fillStyle=bg;ctx.fill();
 
   // Sweep rotante (animazione indipendente)
-  ctx.save();ctx.translate(cx,cy);ctx.rotate(sweepAngle+θ);
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(sweepAngle+rot);
   for(let i=0;i<8;i++){
     ctx.beginPath();ctx.moveTo(0,0);
     ctx.arc(0,0,R,-Math.PI/2-0.9+i*0.11,-Math.PI/2-0.9+(i+1)*0.11);
@@ -513,8 +513,8 @@ function draw(){
   // ══ ELEMENTI FISSI — non ruotano ══
 
   // Label amici: converto da spazio ruotato → schermo
-  // sx = cx + (fx-cx)*cos(θ) + (fy-cy)*sin(θ)
-  // sy = cy - (fx-cx)*sin(θ) + (fy-cy)*cos(θ)
+  // sx = cx + (fx-cx)*cos(rot) + (fy-cy)*sin(rot)
+  // sy = cy - (fx-cx)*sin(rot) + (fy-cy)*cos(rot)
   flist.forEach(f=>{
     if(f._fx===undefined||myLat==null)return;
     const dx=f._fx-cx, dy=f._fy-cy;
@@ -552,7 +552,7 @@ function draw(){
     const sp=displayFriendPos[trackedFriendId]||(tf.lat!=null?{lat:tf.lat,lon:tf.lon}:null);
     if(sp&&sp.lat!=null){
       const{dist:td,bearing:tb}=distBear(myLat,myLon,sp.lat,sp.lon);
-      const ar=d2r(tb)-θ-Math.PI/2;
+      const ar=d2r(tb)-rot-Math.PI/2;
       const tCol=tf.color||'#00c0ff';
       const nm=tf.name||'?';
       const ds=td<1000?Math.round(td)+'m':(td/1000).toFixed(1)+'km';
@@ -578,6 +578,15 @@ function draw(){
   // Bordo radar (fisso)
   ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);
   ctx.strokeStyle='#1a3a4a';ctx.lineWidth=2;ctx.stroke();
+
+  // ── DEBUG BUSSOLA (rimuovi dopo test) ──
+  ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(4,H-58,W-8,54);
+  ctx.fillStyle=compassActive?'#00e87a':'#ff6644';
+  ctx.font='bold 11px monospace';ctx.textAlign='left';
+  ctx.fillText('bussola: '+(compassActive?'ATTIVA ✓':'INATTIVA ✗'),8,H-42);
+  ctx.fillStyle='#aabbcc';ctx.font='10px monospace';
+  ctx.fillText('heading: '+_dbgAlpha,8,H-28);
+  ctx.fillText(_dbgEvent.substring(0,48),8,H-14);
 }
 
 // ══════════════════════════════════
@@ -719,6 +728,7 @@ function forceGpsUpdate(){
 let _hasAbsolute=false;
 
 function _applyHeading(h){
+  _dbgAlpha=Math.round(h)+'°';
   headingBuf.push(h);
   if(headingBuf.length>5)headingBuf.shift(); // buffer corto = reattivo
   const ref=headingBuf[0];
@@ -736,6 +746,7 @@ function _applyHeading(h){
 
 // Android: deviceorientationabsolute → heading assoluto (nord magnetico)
 function _compassAbsolute(e){
+  _dbgEvent='absolute alpha='+e.alpha;
   if(typeof e.alpha!=='number'||isNaN(e.alpha))return;
   _hasAbsolute=true;
   _applyHeading((360-e.alpha+360)%360);
@@ -762,20 +773,21 @@ function startCompassDirect(){
   },2000);
 }
 
+// Diagnostica sensore
+let _dbgEvent='nessun evento', _dbgAlpha='—', _dbgWebkit='—';
+
 async function requestCompassPermission(){
-  // iOS 13+
   if(typeof DeviceOrientationEvent!=='undefined'&&
      typeof DeviceOrientationEvent.requestPermission==='function'){
     try{
       const res=await DeviceOrientationEvent.requestPermission();
-      if(res==='granted'){startCompassDirect();showToast('🧭 Bussola attivata');}
-      else showToast('⚠️ Permesso bussola negato');
-    }catch(err){showToast('⚠️ '+err.message);}
+      if(res==='granted'){startCompassDirect();showToast('🧭 Bussola attivata — ruota il telefono');}
+      else showToast('⚠️ Permesso negato: '+res);
+    }catch(err){showToast('⚠️ Errore: '+err.message);}
     return;
   }
-  // Android / altri: i listener bastano, basta toccare per assicurarsi che partano
   startCompassDirect();
-  showToast('🧭 Bussola in ascolto...');
+  showToast('🧭 Sensori in ascolto — ruota il telefono lentamente');
 }
 
 setInterval(()=>{
