@@ -578,6 +578,13 @@ function draw(){
   // Bordo radar
   ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);
   ctx.strokeStyle='#1a3a4a';ctx.lineWidth=2;ctx.stroke();
+
+  // Debug heading (piccolo, angolo in alto a destra del radar)
+  if(compassActive){
+    ctx.fillStyle='#3a7a8a99';ctx.font='10px monospace';ctx.textAlign='right';
+    ctx.fillText(Math.round(compassHeading)+'°',cx+R-4,cy-R+14);
+    ctx.textAlign='left';
+  }
 }
 
 // ══════════════════════════════════
@@ -639,7 +646,7 @@ function loop(t){
   if(compassActive){
     let diff=rawHeading-compassHeading;
     while(diff>180)diff-=360;while(diff<-180)diff+=360;
-    if(Math.abs(diff)>1.5) compassHeading=lerpAngle(compassHeading,rawHeading,0.04);
+    compassHeading=lerpAngle(compassHeading,rawHeading,0.15); // lerp veloce per risposta immediata
     updateDisplayHeading();
   }
   if(t-lastDraw>=FRAME_MS){lastDraw=t;draw();}
@@ -715,53 +722,67 @@ function forceGpsUpdate(){
   {enableHighAccuracy:true,maximumAge:0,timeout:20000}); // maximumAge:0 = fix fresco obbligatorio
 }
 // ── BUSSOLA ──
-// compassHeading = heading corrente (0=Nord, 90=Est, 180=Sud, 270=Ovest)
-// compassActive = true se il sensore sta inviando dati
+// Separata: absolute (Android) vs relative+webkitCompassHeading (iOS)
+let _hasAbsolute=false;
 
-function compassHandler(e){
-  let h=null;
-  if(typeof e.webkitCompassHeading==='number'&&!isNaN(e.webkitCompassHeading)){
-    h=e.webkitCompassHeading;
-  } else if(typeof e.alpha==='number'&&!isNaN(e.alpha)){
-    h=(360-e.alpha+360)%360;
-  }
-  if(h===null)return;
-
-  // Buffer mediana circolare — elimina spike e tremore del sensore
+function _applyHeading(h){
   headingBuf.push(h);
-  if(headingBuf.length>HEADING_BUF_SIZE)headingBuf.shift();
-
-  // Mediana su dati circolari: normalizza intorno al primo valore
+  if(headingBuf.length>5)headingBuf.shift(); // buffer corto = reattivo
   const ref=headingBuf[0];
   const norm=headingBuf.map(v=>{let d=v-ref;while(d>180)d-=360;while(d<-180)d+=360;return d;});
   norm.sort((a,b)=>a-b);
   const median=(norm[Math.floor(norm.length/2)]+norm[Math.ceil(norm.length/2)])/2;
   rawHeading=((ref+median)%360+360)%360;
-
   if(!compassActive){
     compassActive=true;
     compassHeading=rawHeading;
     document.getElementById('compass-btn').style.color='var(--green)';
+    document.getElementById('compass-btn').title='Bussola attiva';
+  }
+}
+
+// Android: deviceorientationabsolute → heading assoluto (nord magnetico)
+function _compassAbsolute(e){
+  if(typeof e.alpha!=='number'||isNaN(e.alpha))return;
+  _hasAbsolute=true;
+  _applyHeading((360-e.alpha+360)%360);
+}
+
+// iOS / fallback: deviceorientation con webkitCompassHeading
+function _compassRelative(e){
+  if(_hasAbsolute)return; // preferisci absolute
+  if(typeof e.webkitCompassHeading==='number'&&!isNaN(e.webkitCompassHeading)){
+    _applyHeading(e.webkitCompassHeading);
   }
 }
 
 function startCompassDirect(){
-  window.addEventListener('deviceorientationabsolute',compassHandler,true);
-  window.addEventListener('deviceorientation',compassHandler,true);
+  window.addEventListener('deviceorientationabsolute',_compassAbsolute,true);
+  window.addEventListener('deviceorientation',_compassRelative,true);
+  // Feedback: se dopo 2s ancora nessun dato, segnala il bottone come "da toccare"
+  setTimeout(()=>{
+    if(!compassActive){
+      const b=document.getElementById('compass-btn');
+      b.style.background='#ffa04033';b.style.color='#ffa040';
+      b.title='Tocca per attivare la bussola';
+    }
+  },2000);
 }
 
 async function requestCompassPermission(){
-  if(typeof DeviceOrientationEvent!=='undefined' &&
+  // iOS 13+
+  if(typeof DeviceOrientationEvent!=='undefined'&&
      typeof DeviceOrientationEvent.requestPermission==='function'){
-    // iOS 13+ — DEVE essere chiamato da un tap utente
     try{
       const res=await DeviceOrientationEvent.requestPermission();
-      if(res==='granted') startCompassDirect();
+      if(res==='granted'){startCompassDirect();showToast('🧭 Bussola attivata');}
       else showToast('⚠️ Permesso bussola negato');
-    }catch(err){showToast('⚠️ Bussola non disponibile');}
-  } else {
-    startCompassDirect();
+    }catch(err){showToast('⚠️ '+err.message);}
+    return;
   }
+  // Android / altri: i listener bastano, basta toccare per assicurarsi che partano
+  startCompassDirect();
+  showToast('🧭 Bussola in ascolto...');
 }
 
 setInterval(()=>{
