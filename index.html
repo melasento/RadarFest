@@ -88,20 +88,21 @@ body{display:flex;flex-direction:column}
      display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap}
 .icB{padding:9px 10px;background:var(--bg2);border:1px solid var(--ring);
      color:var(--text);border-radius:10px;cursor:pointer;font-size:15px}
-/* SOS ALERT OVERLAY */
-#sos-overlay{position:fixed;inset:0;background:rgba(180,0,20,0.92);
-             backdrop-filter:blur(8px);z-index:2000;display:none;
-             flex-direction:column;align-items:center;justify-content:center;gap:20px;
-             animation:sosFade .3s ease}
-#sos-overlay.show{display:flex}
+/* SOS BANNER (sopra il radar, non blocca la vista) */
+#sos-banner{position:absolute;top:0;left:0;right:0;z-index:100;display:none;
+            background:rgba(160,0,20,0.92);backdrop-filter:blur(4px);
+            padding:10px 14px;flex-direction:row;align-items:center;gap:10px;
+            border-bottom:2px solid var(--red);animation:sosFade .3s ease}
+#sos-banner.show{display:flex}
 @keyframes sosFade{from{opacity:0}to{opacity:1}}
-.sos-icon{font-size:80px;animation:sosBounce .5s infinite alternate}
-@keyframes sosBounce{from{transform:scale(0.95)}to{transform:scale(1.08)}}
-.sos-title{font-size:28px;font-weight:900;color:#fff;text-align:center}
-.sos-from{font-size:16px;color:#ffaaaa;text-align:center}
-.sos-countdown{font-size:48px;font-weight:900;color:#fff;font-variant-numeric:tabular-nums}
-.sos-stop{padding:14px 36px;border-radius:16px;border:none;font-size:16px;font-weight:700;
-          cursor:pointer;background:#fff;color:#cc0011;font-family:inherit}
+.sos-banner-icon{font-size:22px;animation:sosBounce .4s infinite alternate;flex-shrink:0}
+@keyframes sosBounce{from{transform:scale(0.9)}to{transform:scale(1.1)}}
+.sos-banner-info{flex:1;min-width:0}
+.sos-banner-title{font-size:13px;font-weight:900;color:#fff;letter-spacing:.5px}
+.sos-banner-from{font-size:11px;color:#ffbbbb;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sos-banner-cd{font-size:22px;font-weight:900;color:#fff;font-variant-numeric:tabular-nums;flex-shrink:0}
+.sos-stop{padding:8px 14px;border-radius:10px;border:none;font-size:12px;font-weight:700;
+          cursor:pointer;background:#fff;color:#cc0011;font-family:inherit;flex-shrink:0}
 /* NOTIFICHE PANEL */
 #notif-panel{position:fixed;top:46px;right:0;width:280px;background:var(--bg2);
              border:1px solid var(--ring);border-radius:0 0 0 12px;z-index:500;
@@ -188,7 +189,19 @@ body{display:flex;flex-direction:column}
     <div class="tab active" id="tab-r" onclick="switchTab('r')">🎯 Radar</div>
     <div class="tab" id="tab-l" onclick="switchTab('l')">☰ <span id="lcnt">Lista (0)</span></div>
   </div>
-  <div id="radar-wrap"><canvas id="cv"></canvas></div>
+  <div id="radar-wrap">
+    <canvas id="cv"></canvas>
+    <!-- SOS BANNER (sul radar, non blocca) -->
+    <div id="sos-banner">
+      <div class="sos-banner-icon">🚨</div>
+      <div class="sos-banner-info">
+        <div class="sos-banner-title">⚠ EMERGENZA SOS</div>
+        <div class="sos-banner-from" id="sos-from">Da: —</div>
+      </div>
+      <div class="sos-banner-cd" id="sos-cd">2:00</div>
+      <button class="sos-stop" onclick="manualStopSOS()">✓ OK</button>
+    </div>
+  </div>
   <div id="lista"></div>
   <div id="bb"><div id="bba">
     <!-- SOS -->
@@ -201,14 +214,7 @@ body{display:flex;flex-direction:column}
   </div></div>
 </div>
 
-<!-- SOS OVERLAY (ricevuto) -->
-<div id="sos-overlay">
-  <div class="sos-icon">🚨</div>
-  <div class="sos-title">EMERGENZA SOS</div>
-  <div class="sos-from" id="sos-from">Da: —</div>
-  <div class="sos-countdown" id="sos-cd">2:00</div>
-  <button class="sos-stop" onclick="manualStopSOS()">✓ Ho capito</button>
-</div>
+
 
 <div id="warn">⚠️ Un amico si è allontanato oltre 200m!</div>
 <div id="toast"></div>
@@ -227,12 +233,12 @@ const SOS_DURATION=120; // secondi
 // ══════════════════════════════════
 let selColor=COLORS[1],myId=null,myName='',myColor=COLORS[1],groupId=null;
 let myLat=null,myLon=null,myAcc=null,gpsTs=0;
-let rawHeading=0,heading=0; // heading smoothato
 let friends={},predMap={};
 let gpsWatch=null,stTimer=null,mqttClient=null;
 let notifications=[];
 let sosTimer=null,sosAudioCtx=null,sosVibInterval=null,sosAudioInterval=null,sosCountdown=SOS_DURATION;
-let sosFromId=null,sosFromPos=null,sosCdInterval=null;
+let sosFromId=null,sosFromPos=null,sosCdInterval=null,sosActiveId=null;
+let smoothFriendPos={}; // posizioni smussate per eliminare jitter GPS
 
 // ══════════════════════════════════
 // UTILS
@@ -249,11 +255,39 @@ function distBear(la1,lo1,la2,lo2){
   return{dist,bearing:(Math.atan2(y,x)*180/Math.PI+360)%360};
 }
 const cardinal=b=>['N','NE','E','SE','S','SO','O','NO'][Math.round(b/45)%8];
-// Interpolazione angolare che gestisce il wrap 0°↔360°
-function lerpAngle(cur,tgt,t){
-  let diff=tgt-cur;
-  while(diff>180)diff-=360;while(diff<-180)diff+=360;
-  return cur+diff*t;
+
+
+// Smoothing posizione GPS amici
+// Logica: dead zone + smoothing molto lento
+// - se nuovo punto è entro DEAD_ZONE metri → ignorato (è rumore GPS)
+// - se tra DEAD_ZONE e JUMP_THR → smoothing lentissimo (α=0.08)
+// - se oltre JUMP_THR → accettato subito (movimento reale)
+function updateSmoothedPos(id, newLat, newLon, acc){
+  const DEAD_ZONE = Math.max((acc||40)*1.2, 40); // dead zone = 120% dell'accuratezza, minimo 40m
+  const JUMP_THR  = 150; // oltre 150m = movimento reale, accetta subito
+  const ALPHA     = 0.08; // smoothing molto lento per uscire dalla dead zone
+
+  if(!smoothFriendPos[id]){
+    smoothFriendPos[id]={lat:newLat,lon:newLon};
+    return;
+  }
+  const prev=smoothFriendPos[id];
+  const{dist}=distBear(prev.lat,prev.lon,newLat,newLon);
+
+  if(dist < DEAD_ZONE){
+    // Dentro la dead zone: ignora completamente, il dot NON si muove
+    return;
+  }
+  if(dist > JUMP_THR){
+    // Salto netto: l'amico si è davvero spostato molto
+    smoothFriendPos[id]={lat:newLat,lon:newLon};
+    return;
+  }
+  // Zona intermedia: movimento reale ma lento, avvicinati gradualmente
+  smoothFriendPos[id]={
+    lat:prev.lat*(1-ALPHA)+newLat*ALPHA,
+    lon:prev.lon*(1-ALPHA)+newLon*ALPHA
+  };
 }
 function predictPos(f){
   const p=predMap[f.id];
@@ -299,10 +333,7 @@ function enterGroup(){
   document.getElementById('gnm').textContent='Gruppo '+groupId;
   setTimeout(fixCanvas,50);
   connectMQTT();startGps();
-  if(window.DeviceOrientationEvent){
-    window.addEventListener('deviceorientationabsolute',onOrient,true);
-    window.addEventListener('deviceorientation',onOrient,true);
-  }
+
 }
 
 // ══════════════════════════════════
@@ -355,22 +386,35 @@ function draw(){
   const flist=Object.values(friends).filter(f=>f.lat!==null&&myLat!==null);
   ctx.save();ctx.beginPath();ctx.arc(cx,cy,R-1,0,Math.PI*2);ctx.clip();
   flist.forEach(f=>{
-    const pr=predictPos(f);const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
+    const sp=smoothFriendPos[f.id]||{lat:f.lat,lon:f.lon};const pr=(sp.lat!==null&&sp.lat!==undefined)?sp:{lat:f.lat,lon:f.lon};const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
     const r=R*Math.min(dist/MAX_R,0.96);
-    const ar=d2r(bearing-heading)-Math.PI/2;
+    const ar=d2r(bearing)-Math.PI/2;
     const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
     const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>25000?'#778899':col;
     ctx.save();ctx.setLineDash([3,6]);
     ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);ctx.strokeStyle=fc+'55';ctx.lineWidth=1;ctx.stroke();ctx.restore();
-    ctx.beginPath();ctx.arc(fx,fy,6,0,Math.PI*2);ctx.fillStyle=fc;ctx.shadowColor=fc;ctx.shadowBlur=14;ctx.fill();ctx.shadowBlur=0;
-    ctx.beginPath();ctx.arc(fx,fy,11,0,Math.PI*2);ctx.strokeStyle=fc+'44';ctx.lineWidth=1.5;ctx.stroke();
+    const isSOS=sosActiveId&&f.id===sosActiveId;
+    const blink=isSOS&&(Date.now()%600<300);
+    const dotColor=isSOS?'#ff3344':fc;
+    const dotR=isSOS?8:6;
+    if(!blink){
+      ctx.beginPath();ctx.arc(fx,fy,dotR,0,Math.PI*2);
+      ctx.fillStyle=dotColor;ctx.shadowColor=dotColor;ctx.shadowBlur=isSOS?24:14;ctx.fill();ctx.shadowBlur=0;
+    }
+    if(isSOS){
+      // Anello SOS pulsante
+      const pulse=((Date.now()%1000)/1000);
+      ctx.beginPath();ctx.arc(fx,fy,12+pulse*10,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(255,51,68,${0.7-pulse*0.7})`;ctx.lineWidth=2;ctx.stroke();
+    }
+    ctx.beginPath();ctx.arc(fx,fy,isSOS?14:11,0,Math.PI*2);ctx.strokeStyle=(isSOS?'#ff334488':fc+'44');ctx.lineWidth=1.5;ctx.stroke();
   });
   ctx.restore();
   // Label amici (fuori clip)
   flist.forEach(f=>{
-    const pr=predictPos(f);const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
+    const sp=smoothFriendPos[f.id]||{lat:f.lat,lon:f.lon};const pr=(sp.lat!==null&&sp.lat!==undefined)?sp:{lat:f.lat,lon:f.lon};const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
     const r=R*Math.min(dist/MAX_R,0.96);
-    const ar=d2r(bearing-heading)-Math.PI/2;
+    const ar=d2r(bearing)-Math.PI/2;
     const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
     const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>25000?'#778899':col;
     const nm=f.name||'?',ds=Math.round(dist)+'m';
@@ -400,8 +444,6 @@ let prevT=0;
 function loop(t){
   const dt=Math.min((t-prevT)/1000,0.1);prevT=t;
   sweepAngle+=dt*1.2;
-  // Smoothing heading: fattore 0.05 = movimento fluido senza rimbalzi
-  heading=lerpAngle(heading,rawHeading,0.05);
   draw();
   requestAnimationFrame(loop);
 }
@@ -430,11 +472,7 @@ setInterval(()=>{
   if(!gpsTs||!myLat)return;
   if((Date.now()-gpsTs)>30000){document.getElementById('gdot').className='gdot old';document.getElementById('glbl').textContent='GPS vecchio ±'+(myAcc||'?')+'m';}
 },5000);
-// Bussola — aggiorna solo rawHeading; il loop applica lo smoothing
-function onOrient(e){
-  const h=e.absolute?e.alpha:(e.webkitCompassHeading||e.alpha||0);
-  if(h!=null)rawHeading=h;
-}
+
 
 // ══════════════════════════════════
 // MQTT
@@ -454,6 +492,7 @@ function connectMQTT(){
       }else if(type==='pos'){
         if(friends[uid2]&&friends[uid2].lat!==null)predMap[uid2]={lat:friends[uid2].lat,lon:friends[uid2].lon,ts:friends[uid2].ts||0};
         Object.assign(friends[uid2],{lat:data.lat,lon:data.lon,ts:data.ts,acc:data.acc});
+        updateSmoothedPos(uid2,data.lat,data.lon,data.acc);
         checkSep();
       }else if(type==='sos'){
         // Ricevo SOS da un amico
@@ -490,6 +529,7 @@ function triggerSOS(){
 
 function startSOSAlert(senderName,senderId){
   sosFromId=senderId||null;
+  sosActiveId=senderId||null;
   // Salva ultima posizione nota del mittente
   sosFromPos=null;
   if(senderId&&friends[senderId]&&friends[senderId].lat!==null){
@@ -497,7 +537,7 @@ function startSOSAlert(senderName,senderId){
   }
   // Mostra overlay
   document.getElementById('sos-from').textContent='Da: '+senderName;
-  document.getElementById('sos-overlay').classList.add('show');
+  document.getElementById('sos-banner').style.display='flex';
   sosCountdown=SOS_DURATION;
   updateSOSCountdown();
   // Countdown ogni secondo
@@ -534,7 +574,7 @@ function updateSOSCountdown(){
   document.getElementById('sos-cd').textContent=m+':'+(s<10?'0':'')+s;
 }
 function stopSOSAlert(){
-  document.getElementById('sos-overlay').classList.remove('show');
+  document.getElementById('sos-banner').style.display='none';
   clearInterval(sosVibInterval);clearInterval(sosAudioInterval);clearInterval(sosCdInterval);
   if(navigator.vibrate)navigator.vibrate(0);
   if(sosAudioCtx){sosAudioCtx.close();sosAudioCtx=null;}
@@ -546,7 +586,7 @@ function stopSOSAlert(){
       {retain:false,qos:1}
     );
   }
-  sosFromId=null;sosFromPos=null;
+  sosFromId=null;sosFromPos=null;sosActiveId=null;
 }
 function autoStopSOS(senderName){
   // Costruisci stringa posizione prima di resettare sosFromPos
@@ -634,7 +674,7 @@ function renderLista(){
   if(!list.length){el.innerHTML=`<div style="color:var(--dim);text-align:center;margin-top:60px;font-size:13px;line-height:2">Nessun amico.<br>Codice: <b style="color:var(--cyan)">${groupId}</b></div>`;return;}
   el.innerHTML=list.map(f=>{
     const col=f.color||'#00c0ff',pr=predictPos(f);
-    const db2=(pr.lat&&myLat)?distBear(myLat,myLon,pr.lat,pr.lon):null;
+    const sp2=smoothFriendPos[f.id]||{lat:f.lat,lon:f.lon};const db2=(sp2.lat&&myLat)?distBear(myLat,myLon,sp2.lat,sp2.lon):null;
     const ds=db2?Math.round(db2.dist)+'m':'—',dr=db2?cardinal(db2.bearing):'—';
     return `<div class="fr"><div class="av" style="border-color:${col};color:${col};background:${hex2rgba(col,.15)}">${(f.name||'?')[0].toUpperCase()}</div><div class="fi"><div class="fn">${f.name||'Amico'}</div><div class="fs">${dr} · GPS</div></div><div class="fd" style="color:${col}">${ds}</div></div>`;
   }).join('');
@@ -647,7 +687,7 @@ function getUrl(){const o=location.origin;if(!o||o==='null'||o.startsWith('file'
 function shareWA(){const url=getUrl();const msg=url?'🧭 *Friend Compass*\nUnisciti al gruppo *'+groupId+'*!\n\n'+url:'🧭 *Friend Compass*\nCodice: *'+groupId+'*';if(navigator.share&&url)navigator.share({title:'Friend Compass',url}).catch(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'));else window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');}
 function copyLink(){const url=getUrl();if(!url){showToast('⚠️ Serve HTTPS');return;}navigator.clipboard?.writeText(url);showToast('🔗 Link copiato!');}
 function copyCode(){navigator.clipboard?.writeText(groupId);showToast('📋 Codice: '+groupId);}
-function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsWatch)navigator.geolocation.clearWatch(gpsWatch);removeMQTT();friends={};predMap={};show('s-landing');groupId=null;}
+function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsWatch)navigator.geolocation.clearWatch(gpsWatch);removeMQTT();friends={};predMap={};smoothFriendPos={};show('s-landing');groupId=null;}
 
 // ══════════════════════════════════
 // TOAST
