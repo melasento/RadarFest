@@ -8,38 +8,32 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{--bg:#050813;--bg2:#07111f;--bg3:#040c18;--green:#00e87a;--cyan:#00c0ff;
-      --orange:#ffa040;--ring:#1a3a4a;--text:#e0eef5;--dim:#4a7a99}
-html,body{height:100%;background:var(--bg);color:var(--text);
-  font-family:'Segoe UI',Roboto,sans-serif;overflow:hidden}
+      --orange:#ffa040;--red:#ff3344;--ring:#1a3a4a;--text:#e0eef5;--dim:#4a7a99}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Segoe UI',Roboto,sans-serif;overflow:hidden}
 body{display:flex;flex-direction:column}
 .screen{display:none;flex-direction:column;flex:1;overflow:hidden}
 .screen.active{display:flex}
 /* LANDING */
 #s-landing{align-items:center;justify-content:center;gap:16px;padding:28px 20px;overflow-y:auto}
-.logo{font-size:56px}.title{font-size:24px;font-weight:800}
-.sub{font-size:12px;color:var(--dim)}
-.card{background:var(--bg2);border:1px solid var(--ring);border-radius:16px;
-      padding:18px 20px;width:100%;max-width:360px}
+.logo{font-size:56px}.title{font-size:24px;font-weight:800}.sub{font-size:12px;color:var(--dim)}
+.card{background:var(--bg2);border:1px solid var(--ring);border-radius:16px;padding:18px 20px;width:100%;max-width:360px}
 .ct{font-size:13px;font-weight:700;color:var(--cyan);margin-bottom:12px}
-.field{width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--ring);
-       border-radius:10px;color:var(--text);font-size:14px;outline:none;
-       margin-bottom:10px;font-family:inherit}
+.field{width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--ring);border-radius:10px;
+       color:var(--text);font-size:14px;outline:none;margin-bottom:10px;font-family:inherit}
 .field::placeholder{color:var(--dim)}
-.btn{width:100%;padding:11px;border-radius:11px;border:none;font-size:14px;
-     font-weight:700;cursor:pointer;font-family:inherit}
-.btn-g{background:var(--green);color:#000}
-.btn-b{background:#0077cc;color:#fff;margin-top:6px}
+.btn{width:100%;padding:11px;border-radius:11px;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+.btn-g{background:var(--green);color:#000}.btn-b{background:#0077cc;color:#fff;margin-top:6px}
 .btn-ghost{background:transparent;border:1px solid var(--ring);color:var(--dim);margin-top:8px}
 .hint{color:var(--dim);font-size:11px;text-align:center}
 /* NOME */
 #s-name{align-items:center;justify-content:center;padding:24px 20px}
 #s-name .card{max-width:360px}
 .crow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;justify-content:center}
-.sw{width:34px;height:34px;border-radius:50%;cursor:pointer;border:3px solid transparent}
+.sw{width:34px;height:34px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:transform .15s}
 .sw.sel{border-color:#fff;transform:scale(1.18)}
 /* TOPBAR */
-#topbar{display:flex;align-items:center;gap:6px;padding:8px 12px;
-        background:var(--bg2);border-bottom:1px solid var(--ring);flex-shrink:0}
+#topbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--bg2);
+        border-bottom:1px solid var(--ring);flex-shrink:0}
 .gdot{width:8px;height:8px;border-radius:50%;background:#444;transition:all .4s;flex-shrink:0}
 .gdot.wait{background:#f0c000;box-shadow:0 0 6px #f0c000;animation:blink 1.2s infinite}
 .gdot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
@@ -53,9 +47,13 @@ body{display:flex;flex-direction:column}
 .mct{font-size:11px;color:var(--green);flex-shrink:0}
 .tacts{display:flex;gap:4px;flex-shrink:0}
 .tbtn{width:32px;height:32px;border-radius:50%;border:none;cursor:pointer;font-size:15px;
-      background:var(--bg3);color:var(--text);display:flex;align-items:center;justify-content:center}
+      background:var(--bg3);color:var(--text);display:flex;align-items:center;justify-content:center;position:relative}
 .tbtn.g{background:#00c06033;color:var(--green)}
 .tbtn.r{background:#cc220033;color:#ff6060}
+.notif-badge{position:absolute;top:-2px;right:-2px;width:14px;height:14px;border-radius:50%;
+             background:var(--red);color:#fff;font-size:9px;font-weight:700;
+             display:none;align-items:center;justify-content:center}
+.notif-badge.show{display:flex}
 /* TABS */
 #tabs{display:flex;flex-shrink:0}
 .tab{flex:1;padding:8px 0;text-align:center;font-size:13px;cursor:pointer;
@@ -77,14 +75,44 @@ body{display:flex;flex-direction:column}
 /* BOTTOMBAR */
 #bb{background:#050A14;border-top:1px solid #0a2030;padding:8px 12px;flex-shrink:0}
 #bba{display:flex;align-items:center;gap:6px}
-.brbB{flex:1;padding:9px 10px;border-radius:10px;border:none;font-size:12px;
-      font-weight:700;cursor:pointer;background:var(--orange);color:#000;font-family:inherit}
-.brbB.on{background:#cc4400;color:#fff}
-.waB{padding:9px 12px;border-radius:10px;border:none;font-size:12px;font-weight:700;
+/* SOS BUTTON */
+.sosB{padding:10px 18px;border-radius:12px;border:none;font-size:14px;font-weight:900;
+      cursor:pointer;background:var(--red);color:#fff;font-family:inherit;
+      letter-spacing:1px;flex-shrink:0;
+      box-shadow:0 0 0 0 rgba(255,51,68,0.7);
+      animation:sosPulse 2s infinite}
+@keyframes sosPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,51,68,0.5)}70%{box-shadow:0 0 0 8px rgba(255,51,68,0)}}
+.sosB.active{background:#880011;animation:none;box-shadow:none}
+.waB{flex:1;padding:9px 10px;border-radius:10px;border:none;font-size:12px;font-weight:700;
      cursor:pointer;background:#25D366;color:#fff;font-family:inherit;
-     display:flex;align-items:center;gap:5px;white-space:nowrap}
+     display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap}
 .icB{padding:9px 10px;background:var(--bg2);border:1px solid var(--ring);
      color:var(--text);border-radius:10px;cursor:pointer;font-size:15px}
+/* SOS ALERT OVERLAY */
+#sos-overlay{position:fixed;inset:0;background:rgba(180,0,20,0.92);
+             backdrop-filter:blur(8px);z-index:2000;display:none;
+             flex-direction:column;align-items:center;justify-content:center;gap:20px;
+             animation:sosFade .3s ease}
+#sos-overlay.show{display:flex}
+@keyframes sosFade{from{opacity:0}to{opacity:1}}
+.sos-icon{font-size:80px;animation:sosBounce .5s infinite alternate}
+@keyframes sosBounce{from{transform:scale(0.95)}to{transform:scale(1.08)}}
+.sos-title{font-size:28px;font-weight:900;color:#fff;text-align:center}
+.sos-from{font-size:16px;color:#ffaaaa;text-align:center}
+.sos-countdown{font-size:48px;font-weight:900;color:#fff;font-variant-numeric:tabular-nums}
+.sos-stop{padding:14px 36px;border-radius:16px;border:none;font-size:16px;font-weight:700;
+          cursor:pointer;background:#fff;color:#cc0011;font-family:inherit}
+/* NOTIFICHE PANEL */
+#notif-panel{position:fixed;top:46px;right:0;width:280px;background:var(--bg2);
+             border:1px solid var(--ring);border-radius:0 0 0 12px;z-index:500;
+             display:none;max-height:60vh;overflow-y:auto}
+#notif-panel.show{display:block}
+.notif-header{padding:10px 14px;font-size:12px;font-weight:700;color:var(--cyan);
+              border-bottom:1px solid var(--ring);display:flex;justify-content:space-between}
+.notif-item{padding:10px 14px;border-bottom:1px solid var(--ring);font-size:12px}
+.notif-item .ni-title{font-weight:700;color:var(--red);margin-bottom:3px}
+.notif-item .ni-time{color:var(--dim);font-size:11px}
+.notif-empty{padding:20px;text-align:center;color:var(--dim);font-size:12px}
 /* TOAST / WARN */
 #toast{position:fixed;bottom:76px;left:50%;transform:translateX(-50%);
        background:var(--green);color:#000;padding:8px 20px;border-radius:20px;
@@ -92,8 +120,7 @@ body{display:flex;flex-direction:column}
        transition:opacity .3s;z-index:999;max-width:94vw;text-align:center}
 #toast.show{opacity:1}
 #warn{position:fixed;top:46px;left:0;right:0;background:#cc220099;backdrop-filter:blur(4px);
-      color:#fff;padding:7px;text-align:center;font-size:12px;font-weight:700;
-      display:none;z-index:997}
+      color:#fff;padding:7px;text-align:center;font-size:12px;font-weight:700;display:none;z-index:997}
 #warn.show{display:block}
 </style>
 </head>
@@ -138,13 +165,25 @@ body{display:flex;flex-direction:column}
     <div class="cbdg" id="cbdg" onclick="copyCode()">—</div>
     <div class="mct" id="mct">1 membro</div>
     <div class="tacts">
-      <button class="tbtn" onclick="showToast('🔔 prossimamente')">🔔</button>
+      <button class="tbtn" id="bell-btn" onclick="toggleNotifPanel()">
+        🔔<div class="notif-badge" id="notif-badge">0</div>
+      </button>
       <button class="tbtn g" onclick="shareWA()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
       </button>
       <button class="tbtn r" onclick="leaveGroup()">✕</button>
     </div>
   </div>
+
+  <!-- PANNELLO NOTIFICHE -->
+  <div id="notif-panel">
+    <div class="notif-header">
+      <span>🔔 Notifiche</span>
+      <span style="cursor:pointer;color:var(--dim)" onclick="clearNotifs()">Cancella</span>
+    </div>
+    <div id="notif-list"><div class="notif-empty">Nessuna notifica</div></div>
+  </div>
+
   <div id="tabs">
     <div class="tab active" id="tab-r" onclick="switchTab('r')">🎯 Radar</div>
     <div class="tab" id="tab-l" onclick="switchTab('l')">☰ <span id="lcnt">Lista (0)</span></div>
@@ -152,31 +191,52 @@ body{display:flex;flex-direction:column}
   <div id="radar-wrap"><canvas id="cv"></canvas></div>
   <div id="lista"></div>
   <div id="bb"><div id="bba">
-    <button class="brbB" id="brbB" onclick="toggleBrb()">⏱ BRB / Sto tornando</button>
+    <!-- SOS -->
+    <button class="sosB" id="sosB" onclick="triggerSOS()">🆘 SOS</button>
     <button class="waB" onclick="shareWA()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-      Invita
+      Invita WhatsApp
     </button>
     <button class="icB" onclick="copyLink()">🔗</button>
   </div></div>
+</div>
+
+<!-- SOS OVERLAY (ricevuto) -->
+<div id="sos-overlay">
+  <div class="sos-icon">🚨</div>
+  <div class="sos-title">EMERGENZA SOS</div>
+  <div class="sos-from" id="sos-from">Da: —</div>
+  <div class="sos-countdown" id="sos-cd">2:00</div>
+  <button class="sos-stop" onclick="manualStopSOS()">✓ Ho capito</button>
 </div>
 
 <div id="warn">⚠️ Un amico si è allontanato oltre 200m!</div>
 <div id="toast"></div>
 
 <script>
-// ════════════ CONFIG ════════════
+// ══════════════════════════════════
+// CONFIG
+// ══════════════════════════════════
 const BROKER='wss://broker.emqx.io:8084/mqtt';
 const COLORS=['#00e87a','#00c0ff','#ff6b6b','#ffa040','#c084fc','#facc15','#f472b6','#38bdf8','#4ade80','#fb923c'];
 const SEP_THR=200,MAX_R=500;
+const SOS_DURATION=120; // secondi
 
-// ════════════ STATO ════════════
+// ══════════════════════════════════
+// STATO
+// ══════════════════════════════════
 let selColor=COLORS[1],myId=null,myName='',myColor=COLORS[1],groupId=null;
-let isBrb=false,myLat=null,myLon=null,myAcc=null,gpsTs=0;
-let heading=0,friends={},predMap={};
+let myLat=null,myLon=null,myAcc=null,gpsTs=0;
+let rawHeading=0,heading=0; // heading smoothato
+let friends={},predMap={};
 let gpsWatch=null,stTimer=null,mqttClient=null;
+let notifications=[];
+let sosTimer=null,sosAudioCtx=null,sosVibInterval=null,sosAudioInterval=null,sosCountdown=SOS_DURATION;
+let sosFromId=null,sosFromPos=null,sosCdInterval=null;
 
-// ════════════ UTILS ════════════
+// ══════════════════════════════════
+// UTILS
+// ══════════════════════════════════
 const uid=()=>Math.random().toString(36).substr(2,9)+Date.now().toString(36);
 const rndCode=()=>Math.random().toString(36).substr(2,6).toUpperCase();
 const d2r=d=>d*Math.PI/180;
@@ -189,17 +249,24 @@ function distBear(la1,lo1,la2,lo2){
   return{dist,bearing:(Math.atan2(y,x)*180/Math.PI+360)%360};
 }
 const cardinal=b=>['N','NE','E','SE','S','SO','O','NO'][Math.round(b/45)%8];
+// Interpolazione angolare che gestisce il wrap 0°↔360°
+function lerpAngle(cur,tgt,t){
+  let diff=tgt-cur;
+  while(diff>180)diff-=360;while(diff<-180)diff+=360;
+  return cur+diff*t;
+}
 function predictPos(f){
   const p=predMap[f.id];
   if(!p||f.lat===null)return{lat:f.lat,lon:f.lon};
-  const dt=(Date.now()-(f.ts||0))/1000;
-  if(dt<20)return{lat:f.lat,lon:f.lon};
+  const dt=(Date.now()-(f.ts||0))/1000;if(dt<20)return{lat:f.lat,lon:f.lon};
   const ds=(f.ts-p.ts)/1000;if(ds<=0)return{lat:f.lat,lon:f.lon};
-  const cl=Math.min(dt,30);
-  return{lat:f.lat+(f.lat-p.lat)/ds*cl,lon:f.lon+(f.lon-p.lon)/ds*cl};
+  return{lat:f.lat+(f.lat-p.lat)/ds*Math.min(dt,30),lon:f.lon+(f.lon-p.lon)/ds*Math.min(dt,30)};
 }
+function fmtTime(d){return d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});}
 
-// ════════════ COLOR PICKER ════════════
+// ══════════════════════════════════
+// COLOR PICKER
+// ══════════════════════════════════
 function buildPicker(){
   const el=document.getElementById('crow');el.innerHTML='';
   COLORS.forEach(c=>{
@@ -210,7 +277,9 @@ function buildPicker(){
   });
 }
 
-// ════════════ NAVIGAZIONE ════════════
+// ══════════════════════════════════
+// NAV
+// ══════════════════════════════════
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
 function goLanding(){show('s-landing');groupId=null;}
 function startCreate(){groupId=rndCode();buildPicker();show('s-name');setTimeout(()=>document.getElementById('name-inp').focus(),80);}
@@ -224,14 +293,11 @@ function confirmName(){
   if(!n){showToast('⚠️ Inserisci il tuo nome');return;}
   myName=n;myColor=selColor;myId=uid();enterGroup();
 }
-
-// ════════════ ENTRA NEL GRUPPO ════════════
 function enterGroup(){
   show('s-radar');
   document.getElementById('cbdg').textContent=groupId;
   document.getElementById('gnm').textContent='Gruppo '+groupId;
-  // IMPORTANTE: ridimensiona il canvas DOPO che la schermata è visibile
-  setTimeout(()=>{fixCanvas();},50);
+  setTimeout(fixCanvas,50);
   connectMQTT();startGps();
   if(window.DeviceOrientationEvent){
     window.addEventListener('deviceorientationabsolute',onOrient,true);
@@ -239,147 +305,111 @@ function enterGroup(){
   }
 }
 
-// ════════════ CANVAS ════════════
+// ══════════════════════════════════
+// CANVAS
+// ══════════════════════════════════
 const cv=document.getElementById('cv');
 const ctx=cv.getContext('2d');
 let sweepAngle=0;
-
 function fixCanvas(){
-  const wrap=document.getElementById('radar-wrap');
-  // Usa le dimensioni reali del wrapper (ora visibile)
-  cv.width=wrap.offsetWidth;
-  cv.height=wrap.offsetHeight;
+  const w=document.getElementById('radar-wrap');
+  cv.width=w.offsetWidth;cv.height=w.offsetHeight;
 }
 window.addEventListener('resize',fixCanvas);
 
-// ════════════ DRAW RADAR ════════════
+// ══════════════════════════════════
+// DRAW
+// ══════════════════════════════════
 function draw(){
   const W=cv.width,H=cv.height;
   if(!W||!H){fixCanvas();return;}
   const cx=W/2,cy=H/2,R=Math.min(W,H)/2-14;
   ctx.clearRect(0,0,W,H);
-
-  // BG
   const bg=ctx.createRadialGradient(cx,cy,0,cx,cy,R);
   bg.addColorStop(0,'#071d2a');bg.addColorStop(0.7,'#040e16');bg.addColorStop(1,'#020409');
   ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fillStyle=bg;ctx.fill();
-
-  // Sweep (scia + cono + linea)
+  // Sweep
   ctx.save();ctx.translate(cx,cy);ctx.rotate(sweepAngle);
-  // scia
   for(let i=0;i<8;i++){
-    ctx.beginPath();ctx.moveTo(0,0);
-    const a0=-Math.PI/2-0.9+i*0.11,a1=-Math.PI/2-0.9+(i+1)*0.11;
-    ctx.arc(0,0,R,a0,a1);ctx.closePath();
+    ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,-Math.PI/2-0.9+i*0.11,-Math.PI/2-0.9+(i+1)*0.11);ctx.closePath();
     ctx.fillStyle=`rgba(0,200,100,${0.01+i*0.012})`;ctx.fill();
   }
-  // cono
   ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,-Math.PI/2-0.2,-Math.PI/2+0.2);ctx.closePath();
-  const cg=ctx.createLinearGradient(0,-R,0,0);
-  cg.addColorStop(0,'rgba(0,232,122,0.30)');cg.addColorStop(1,'rgba(0,232,122,0.02)');
+  const cg=ctx.createLinearGradient(0,-R,0,0);cg.addColorStop(0,'rgba(0,232,122,0.30)');cg.addColorStop(1,'rgba(0,232,122,0.02)');
   ctx.fillStyle=cg;ctx.fill();
-  // linea
-  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-R);
-  ctx.strokeStyle='#00e87a';ctx.lineWidth=2;ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-R);ctx.strokeStyle='#00e87a';ctx.lineWidth=2;ctx.stroke();
   ctx.restore();
-
   // Cerchi
   [1/3,2/3,1].forEach(f=>{
-    ctx.beginPath();ctx.arc(cx,cy,R*f,0,Math.PI*2);
-    ctx.strokeStyle='#1a3a4a';ctx.lineWidth=1;ctx.stroke();
-    ctx.fillStyle='#3a7a8a';ctx.font='10px sans-serif';ctx.textAlign='center';
-    ctx.fillText(Math.round(MAX_R*f)+'m',cx,cy-R*f+13);
+    ctx.beginPath();ctx.arc(cx,cy,R*f,0,Math.PI*2);ctx.strokeStyle='#1a3a4a';ctx.lineWidth=1;ctx.stroke();
+    ctx.fillStyle='#3a7a8a';ctx.font='10px sans-serif';ctx.textAlign='center';ctx.fillText(Math.round(MAX_R*f)+'m',cx,cy-R*f+13);
   });
-
   // Linee cardinali
   ctx.strokeStyle='#1a3a4a99';ctx.lineWidth=0.8;
-  [[0,-1],[0,1],[1,0],[-1,0]].forEach(([dx,dy])=>{
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx*R,cy+dy*R);ctx.stroke();
-  });
+  [[0,-1],[0,1],[1,0],[-1,0]].forEach(([dx,dy])=>{ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx*R,cy+dy*R);ctx.stroke();});
   ctx.setLineDash([2,5]);
-  const s=0.707;[[1,-1],[1,1],[-1,1],[-1,-1]].forEach(([dx,dy])=>{
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx*R*s,cy+dy*R*s);ctx.stroke();
-  });ctx.setLineDash([]);
-
-  // Amici — prima le linee e i dot (dentro clip), poi le label fuori
+  [[1,-1],[1,1],[-1,1],[-1,-1]].forEach(([dx,dy])=>{ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx*R*0.707,cy+dy*R*0.707);ctx.stroke();});
+  ctx.setLineDash([]);
+  // Dot amici (dentro clip)
   const now=Date.now();
   const flist=Object.values(friends).filter(f=>f.lat!==null&&myLat!==null);
-  // Clip per dot
   ctx.save();ctx.beginPath();ctx.arc(cx,cy,R-1,0,Math.PI*2);ctx.clip();
   flist.forEach(f=>{
-    const pr=predictPos(f);
-    const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
+    const pr=predictPos(f);const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
     const r=R*Math.min(dist/MAX_R,0.96);
     const ar=d2r(bearing-heading)-Math.PI/2;
     const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
-    const col=f.brb?'#ffa040':(f.color||'#00c0ff');
-    const fc=(now-(f.ts||0))>25000?'#778899':col;
-    // Linea
+    const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>25000?'#778899':col;
     ctx.save();ctx.setLineDash([3,6]);
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);
-    ctx.strokeStyle=fc+'55';ctx.lineWidth=1;ctx.stroke();ctx.restore();
-    // Dot
-    ctx.beginPath();ctx.arc(fx,fy,6,0,Math.PI*2);
-    ctx.fillStyle=fc;ctx.shadowColor=fc;ctx.shadowBlur=14;ctx.fill();ctx.shadowBlur=0;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);ctx.strokeStyle=fc+'55';ctx.lineWidth=1;ctx.stroke();ctx.restore();
+    ctx.beginPath();ctx.arc(fx,fy,6,0,Math.PI*2);ctx.fillStyle=fc;ctx.shadowColor=fc;ctx.shadowBlur=14;ctx.fill();ctx.shadowBlur=0;
     ctx.beginPath();ctx.arc(fx,fy,11,0,Math.PI*2);ctx.strokeStyle=fc+'44';ctx.lineWidth=1.5;ctx.stroke();
   });
   ctx.restore();
-
-  // Label amici (fuori clip, posizionate verso il centro)
+  // Label amici (fuori clip)
   flist.forEach(f=>{
-    const pr=predictPos(f);
-    const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
+    const pr=predictPos(f);const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
     const r=R*Math.min(dist/MAX_R,0.96);
     const ar=d2r(bearing-heading)-Math.PI/2;
     const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
-    const col=f.brb?'#ffa040':(f.color||'#00c0ff');
-    const fc=(now-(f.ts||0))>25000?'#778899':col;
-    const nm=f.name||'?';const ds=Math.round(dist)+'m';
+    const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>25000?'#778899':col;
+    const nm=f.name||'?',ds=Math.round(dist)+'m';
     ctx.font='bold 11px sans-serif';
     const tw=Math.max(ctx.measureText(nm).width,ctx.measureText(ds).width)+10;
-    const th=f.brb?38:28;
-    // Scegli lato: verso il centro del canvas
-    const lx=fx<cx?fx-tw-6:fx+14;
-    const ly=fy-10;
-    // Sfondo etichetta
-    ctx.fillStyle='rgba(2,4,14,0.80)';
-    ctx.fillRect(lx-2,ly,tw+2,th);
-    // Testo
-    ctx.fillStyle='#ffffffee';ctx.font='bold 11px sans-serif';ctx.textAlign='left';
-    ctx.fillText(nm,lx,ly+13);
+    const th=28,lx=fx<cx?fx-tw-6:fx+14,ly=fy-10;
+    ctx.fillStyle='rgba(2,4,14,0.82)';ctx.fillRect(lx-2,ly,tw+2,th);
+    ctx.fillStyle='#ffffffee';ctx.font='bold 11px sans-serif';ctx.textAlign='left';ctx.fillText(nm,lx,ly+13);
     ctx.fillStyle=fc;ctx.font='10px sans-serif';ctx.fillText(ds,lx,ly+25);
-    if(f.brb){ctx.fillStyle='#ffa040';ctx.font='9px sans-serif';ctx.fillText('⏱ BRB',lx,ly+36);}
   });
-
-  // Punto IO (sopra tutto)
-  ctx.beginPath();ctx.arc(cx,cy,7,0,Math.PI*2);
-  ctx.fillStyle=myColor;ctx.shadowColor=myColor;ctx.shadowBlur=18;ctx.fill();ctx.shadowBlur=0;
+  // IO
+  ctx.beginPath();ctx.arc(cx,cy,7,0,Math.PI*2);ctx.fillStyle=myColor;ctx.shadowColor=myColor;ctx.shadowBlur=18;ctx.fill();ctx.shadowBlur=0;
   ctx.beginPath();ctx.arc(cx,cy,13,0,Math.PI*2);ctx.strokeStyle=myColor+'55';ctx.lineWidth=1.5;ctx.stroke();
-  ctx.fillStyle='#ffffffcc';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
-  ctx.fillText(myName||'Io',cx,cy-18);ctx.textAlign='left';
-
+  ctx.fillStyle='#ffffffcc';ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText(myName||'Io',cx,cy-18);ctx.textAlign='left';
   // Bordo + cardinali
   ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.strokeStyle='#1a3a4a';ctx.lineWidth=2;ctx.stroke();
   ctx.fillStyle='#00c0ffcc';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
   ctx.fillText('N',cx,cy-R+20);ctx.fillText('S',cx,cy+R-8);
-  ctx.textAlign='left';ctx.fillText('O',cx-R+8,cy+5);
-  ctx.textAlign='right';ctx.fillText('E',cx+R-8,cy+5);
+  ctx.textAlign='left';ctx.fillText('O',cx-R+8,cy+5);ctx.textAlign='right';ctx.fillText('E',cx+R-8,cy+5);
   ctx.textAlign='left';
 }
 
-// ════════════ LOOP — semplicissimo, indistruttibile ════════════
+// ══════════════════════════════════
+// LOOP
+// ══════════════════════════════════
 let prevT=0;
 function loop(t){
-  const dt=(t-prevT)/1000;
-  prevT=t;
-  // Incrementa solo se dt ragionevole (tab non era in background)
-  if(dt>0&&dt<0.5) sweepAngle+=dt*1.2;
+  const dt=Math.min((t-prevT)/1000,0.1);prevT=t;
+  sweepAngle+=dt*1.2;
+  // Smoothing heading: fattore 0.05 = movimento fluido senza rimbalzi
+  heading=lerpAngle(heading,rawHeading,0.05);
   draw();
   requestAnimationFrame(loop);
 }
-requestAnimationFrame(loop); // parte subito, gira sempre
+requestAnimationFrame(loop);
 
-// ════════════ GPS ════════════
+// ══════════════════════════════════
+// GPS + BUSSOLA
+// ══════════════════════════════════
 function startGps(){
   if(!navigator.geolocation){showToast('⚠️ GPS non supportato');return;}
   const dot=document.getElementById('gdot'),lbl=document.getElementById('glbl');
@@ -393,25 +423,25 @@ function startGps(){
       else{clearTimeout(stTimer);stTimer=null;}
     }
     myLat=lat;myLon=lon;myAcc=acc;publishPos();
-  },e=>{document.getElementById('gdot').className='gdot';document.getElementById('glbl').textContent='GPS off';},
+  },()=>{document.getElementById('gdot').className='gdot';document.getElementById('glbl').textContent='GPS off';},
   {enableHighAccuracy:true,maximumAge:5000,timeout:20000});
 }
 setInterval(()=>{
   if(!gpsTs||!myLat)return;
-  if((Date.now()-gpsTs)>30000){
-    document.getElementById('gdot').className='gdot old';
-    document.getElementById('glbl').textContent='GPS vecchio ±'+(myAcc||'?')+'m';
-  }
+  if((Date.now()-gpsTs)>30000){document.getElementById('gdot').className='gdot old';document.getElementById('glbl').textContent='GPS vecchio ±'+(myAcc||'?')+'m';}
 },5000);
-function onOrient(e){const h=e.absolute?e.alpha:(e.webkitCompassHeading||e.alpha||0);if(h!=null)heading=h;}
+// Bussola — aggiorna solo rawHeading; il loop applica lo smoothing
+function onOrient(e){
+  const h=e.absolute?e.alpha:(e.webkitCompassHeading||e.alpha||0);
+  if(h!=null)rawHeading=h;
+}
 
-// ════════════ MQTT ════════════
+// ══════════════════════════════════
+// MQTT
+// ══════════════════════════════════
 function connectMQTT(){
   mqttClient=mqtt.connect(BROKER,{clientId:'fc_'+myId,clean:true,reconnectPeriod:3000,keepalive:30});
-  mqttClient.on('connect',()=>{
-    mqttClient.subscribe(`fc/${groupId}/#`);
-    publishMember();showToast('🎉 Nel gruppo '+groupId);
-  });
+  mqttClient.on('connect',()=>{mqttClient.subscribe(`fc/${groupId}/#`);publishMember();showToast('🎉 Nel gruppo '+groupId);});
   mqttClient.on('message',(topic,payload)=>{
     try{
       const pts=topic.split('/'),type=pts[2],uid2=pts[3];
@@ -420,53 +450,171 @@ function connectMQTT(){
       if(!friends[uid2])friends[uid2]={id:uid2,lat:null,lon:null,ts:0};
       if(type==='member'){
         if(data.online===false){delete friends[uid2];delete predMap[uid2];}
-        else Object.assign(friends[uid2],{name:data.name,color:data.color,brb:data.brb,id:uid2});
+        else Object.assign(friends[uid2],{name:data.name,color:data.color,id:uid2});
       }else if(type==='pos'){
-        if(friends[uid2]&&friends[uid2].lat!==null)
-          predMap[uid2]={lat:friends[uid2].lat,lon:friends[uid2].lon,ts:friends[uid2].ts||0};
+        if(friends[uid2]&&friends[uid2].lat!==null)predMap[uid2]={lat:friends[uid2].lat,lon:friends[uid2].lon,ts:friends[uid2].ts||0};
         Object.assign(friends[uid2],{lat:data.lat,lon:data.lon,ts:data.ts,acc:data.acc});
         checkSep();
+      }else if(type==='sos'){
+        // Ricevo SOS da un amico
+        const nm=data.name||friends[uid2]?.name||'Un amico';
+        startSOSAlert(nm,uid2);
+      }else if(type==='sosack'){
+        // Qualcuno ha fermato il mio SOS
+        if(data.target===myId){
+          addNotification('✅ '+data.name+' ha confermato il tuo SOS',new Date());
+          showToast('✅ '+data.name+' ha fermato il tuo SOS');
+        }
       }
       updateUI();
     }catch(e){}
   });
   mqttClient.on('offline',()=>showToast('⚠️ Connessione persa…'));
 }
-function publishMember(){
-  if(!mqttClient)return;
-  mqttClient.publish(`fc/${groupId}/member/${myId}`,JSON.stringify({name:myName,color:myColor,brb:isBrb,online:true}),{retain:true,qos:1});
-}
-function publishPos(){
-  if(!mqttClient||myLat===null)return;
-  mqttClient.publish(`fc/${groupId}/pos/${myId}`,JSON.stringify({lat:myLat,lon:myLon,ts:Date.now(),acc:myAcc}),{retain:true,qos:0});
-}
-function removeMQTT(){
-  if(!mqttClient)return;
-  const e=new Uint8Array(0);
-  mqttClient.publish(`fc/${groupId}/member/${myId}`,e,{retain:true,qos:1});
-  mqttClient.publish(`fc/${groupId}/pos/${myId}`,e,{retain:true,qos:1});
-  mqttClient.end();
+function publishMember(){if(!mqttClient)return;mqttClient.publish(`fc/${groupId}/member/${myId}`,JSON.stringify({name:myName,color:myColor,online:true}),{retain:true,qos:1});}
+function publishPos(){if(!mqttClient||myLat===null)return;mqttClient.publish(`fc/${groupId}/pos/${myId}`,JSON.stringify({lat:myLat,lon:myLon,ts:Date.now(),acc:myAcc}),{retain:true,qos:0});}
+function removeMQTT(){if(!mqttClient)return;const e=new Uint8Array(0);mqttClient.publish(`fc/${groupId}/member/${myId}`,e,{retain:true,qos:1});mqttClient.publish(`fc/${groupId}/pos/${myId}`,e,{retain:true,qos:1});mqttClient.end();}
+
+// ══════════════════════════════════
+// SOS
+// ══════════════════════════════════
+function triggerSOS(){
+  if(!confirm('🚨 Inviare SOS a tutti gli amici del gruppo?\n\nUsare solo in caso di emergenza reale.'))return;
+  if(!mqttClient){showToast('⚠️ Non connesso');return;}
+  mqttClient.publish(`fc/${groupId}/sos/${myId}`,JSON.stringify({name:myName,ts:Date.now()}),{retain:false,qos:1});
+  document.getElementById('sosB').classList.add('active');
+  document.getElementById('sosB').textContent='🆘 SOS inviato';
+  showToast('🚨 SOS inviato a tutti!');
+  setTimeout(()=>{document.getElementById('sosB').classList.remove('active');document.getElementById('sosB').textContent='🆘 SOS';},10000);
 }
 
-// ════════════ BRB ════════════
-function toggleBrb(){
-  isBrb=!isBrb;
-  const b=document.getElementById('brbB');
-  b.textContent=isBrb?'▶ Fine BRB':'⏱ BRB / Sto tornando';
-  b.classList.toggle('on',isBrb);publishMember();
-  showToast(isBrb?'⏱ BRB attivato':'✅ Sei tornato!');
+function startSOSAlert(senderName,senderId){
+  sosFromId=senderId||null;
+  // Salva ultima posizione nota del mittente
+  sosFromPos=null;
+  if(senderId&&friends[senderId]&&friends[senderId].lat!==null){
+    sosFromPos={lat:friends[senderId].lat,lon:friends[senderId].lon,ts:friends[senderId].ts};
+  }
+  // Mostra overlay
+  document.getElementById('sos-from').textContent='Da: '+senderName;
+  document.getElementById('sos-overlay').classList.add('show');
+  sosCountdown=SOS_DURATION;
+  updateSOSCountdown();
+  // Countdown ogni secondo
+  clearInterval(sosCdInterval);
+  sosCdInterval=setInterval(()=>{
+    sosCountdown--;
+    updateSOSCountdown();
+    if(sosCountdown<=0){clearInterval(sosCdInterval);autoStopSOS(senderName);}
+  },1000);
+  // Vibrazione continua
+  if(navigator.vibrate){
+    navigator.vibrate([600,200,600,200,600]);
+    sosVibInterval=setInterval(()=>navigator.vibrate([600,200,600,200,600]),2500);
+  }
+  // Audio — Web Audio API (nessun file esterno)
+  try{
+    sosAudioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    function beep(){
+      if(!sosAudioCtx)return;
+      const o=sosAudioCtx.createOscillator();
+      const g=sosAudioCtx.createGain();
+      o.connect(g);g.connect(sosAudioCtx.destination);
+      o.type='square';o.frequency.value=880;
+      g.gain.setValueAtTime(0.6,sosAudioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001,sosAudioCtx.currentTime+0.4);
+      o.start(sosAudioCtx.currentTime);o.stop(sosAudioCtx.currentTime+0.4);
+    }
+    beep();
+    sosAudioInterval=setInterval(beep,700);
+  }catch(e){}
 }
+function updateSOSCountdown(){
+  const m=Math.floor(sosCountdown/60),s=sosCountdown%60;
+  document.getElementById('sos-cd').textContent=m+':'+(s<10?'0':'')+s;
+}
+function stopSOSAlert(){
+  document.getElementById('sos-overlay').classList.remove('show');
+  clearInterval(sosVibInterval);clearInterval(sosAudioInterval);clearInterval(sosCdInterval);
+  if(navigator.vibrate)navigator.vibrate(0);
+  if(sosAudioCtx){sosAudioCtx.close();sosAudioCtx=null;}
+  // Invia ACK al mittente del SOS (se fermato manualmente da qualcun altro)
+  if(sosFromId&&mqttClient&&myId){
+    mqttClient.publish(
+      `fc/${groupId}/sosack/${myId}`,
+      JSON.stringify({name:myName,target:sosFromId,ts:Date.now()}),
+      {retain:false,qos:1}
+    );
+  }
+  sosFromId=null;sosFromPos=null;
+}
+function autoStopSOS(senderName){
+  // Costruisci stringa posizione prima di resettare sosFromPos
+  const posStr=buildPosString();
+  stopSOSAlert();
+  addNotification('🚨 SOS da '+senderName+(posStr?' · '+posStr:''),new Date());
+}
+function manualStopSOS(){
+  const posStr=buildPosString();
+  const nm=document.getElementById('sos-from').textContent.replace('Da: ','');
+  stopSOSAlert();
+  if(posStr) addNotification('🚨 SOS da '+nm+' · '+posStr,new Date());
+  else addNotification('🚨 SOS da '+nm,new Date());
+}
+function buildPosString(){
+  if(!sosFromPos||!sosFromPos.lat)return null;
+  // Se ho la mia posizione calcolo distanza/direzione
+  if(myLat!==null){
+    const{dist,bearing}=distBear(myLat,myLon,sosFromPos.lat,sosFromPos.lon);
+    const age=Math.round((Date.now()-(sosFromPos.ts||0))/1000);
+    return cardinal(bearing)+' · '+Math.round(dist)+'m'+(age>30?' ('+age+'s fa)':'');
+  }
+  // Altrimenti coordinate grezze
+  return sosFromPos.lat.toFixed(5)+', '+sosFromPos.lon.toFixed(5);
+}
+function addNotification(msg,date){
+  notifications.unshift({msg,time:fmtTime(date)});
+  renderNotifications();
+  const badge=document.getElementById('notif-badge');
+  badge.textContent=notifications.length;
+  badge.classList.add('show');
+}
+function renderNotifications(){
+  const el=document.getElementById('notif-list');
+  if(!notifications.length){el.innerHTML='<div class="notif-empty">Nessuna notifica</div>';return;}
+  el.innerHTML=notifications.map(n=>`<div class="notif-item"><div class="ni-title">${n.msg}</div><div class="ni-time">${n.time}</div></div>`).join('');
+}
+function clearNotifs(){
+  notifications=[];renderNotifications();
+  document.getElementById('notif-badge').classList.remove('show');
+}
+function toggleNotifPanel(){
+  const p=document.getElementById('notif-panel');
+  p.classList.toggle('show');
+  if(p.classList.contains('show')){
+    document.getElementById('notif-badge').classList.remove('show');
+  }
+}
+// Chiudi panel cliccando fuori
+document.addEventListener('click',e=>{
+  const p=document.getElementById('notif-panel');
+  if(p.classList.contains('show')&&!p.contains(e.target)&&!document.getElementById('bell-btn').contains(e.target))
+    p.classList.remove('show');
+});
 
-// ════════════ SEPARAZIONE ════════════
+// ══════════════════════════════════
+// SEPARAZIONE
+// ══════════════════════════════════
 function checkSep(){
   if(myLat===null)return;
-  let w=false;
-  Object.values(friends).forEach(f=>{if(f.lat&&distBear(myLat,myLon,f.lat,f.lon).dist>SEP_THR)w=true;});
+  let w=false;Object.values(friends).forEach(f=>{if(f.lat&&distBear(myLat,myLon,f.lat,f.lon).dist>SEP_THR)w=true;});
   document.getElementById('warn').classList.toggle('show',w);
   if(w&&navigator.vibrate)navigator.vibrate([200,100,200]);
 }
 
-// ════════════ UI ════════════
+// ══════════════════════════════════
+// UI
+// ══════════════════════════════════
 function updateUI(){
   const cnt=Object.keys(friends).length;
   document.getElementById('mct').textContent=(cnt+1)+' memb.';
@@ -483,36 +631,33 @@ function switchTab(t){
 }
 function renderLista(){
   const el=document.getElementById('lista'),list=Object.values(friends);
-  if(!list.length){el.innerHTML=`<div style="color:var(--dim);text-align:center;margin-top:60px;font-size:13px;line-height:2">Nessun amico.<br>Condividi il codice <b style="color:var(--cyan)">${groupId}</b></div>`;return;}
+  if(!list.length){el.innerHTML=`<div style="color:var(--dim);text-align:center;margin-top:60px;font-size:13px;line-height:2">Nessun amico.<br>Codice: <b style="color:var(--cyan)">${groupId}</b></div>`;return;}
   el.innerHTML=list.map(f=>{
     const col=f.color||'#00c0ff',pr=predictPos(f);
     const db2=(pr.lat&&myLat)?distBear(myLat,myLon,pr.lat,pr.lon):null;
     const ds=db2?Math.round(db2.dist)+'m':'—',dr=db2?cardinal(db2.bearing):'—';
-    return `<div class="fr">
-      <div class="av" style="border-color:${col};color:${col};background:${hex2rgba(col,.15)}">${(f.name||'?')[0].toUpperCase()}</div>
-      <div class="fi"><div class="fn">${f.name||'Amico'}${f.brb?' ⏱':''}</div><div class="fs">${dr} · GPS</div></div>
-      <div class="fd" style="color:${f.brb?'var(--orange)':col}">${ds}</div>
-    </div>`;
+    return `<div class="fr"><div class="av" style="border-color:${col};color:${col};background:${hex2rgba(col,.15)}">${(f.name||'?')[0].toUpperCase()}</div><div class="fi"><div class="fn">${f.name||'Amico'}</div><div class="fs">${dr} · GPS</div></div><div class="fd" style="color:${col}">${ds}</div></div>`;
   }).join('');
 }
 
-// ════════════ SHARE ════════════
+// ══════════════════════════════════
+// SHARE
+// ══════════════════════════════════
 function getUrl(){const o=location.origin;if(!o||o==='null'||o.startsWith('file'))return null;return o+location.pathname+'?group='+groupId;}
-function shareWA(){
-  const url=getUrl();
-  const msg=url?'🧭 *Friend Compass*\nUnisciti al gruppo *'+groupId+'*!\n\n'+url:'🧭 *Friend Compass*\nCodice: *'+groupId+'*';
-  if(navigator.share&&url)navigator.share({title:'Friend Compass',url}).catch(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'));
-  else window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
-}
+function shareWA(){const url=getUrl();const msg=url?'🧭 *Friend Compass*\nUnisciti al gruppo *'+groupId+'*!\n\n'+url:'🧭 *Friend Compass*\nCodice: *'+groupId+'*';if(navigator.share&&url)navigator.share({title:'Friend Compass',url}).catch(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'));else window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');}
 function copyLink(){const url=getUrl();if(!url){showToast('⚠️ Serve HTTPS');return;}navigator.clipboard?.writeText(url);showToast('🔗 Link copiato!');}
 function copyCode(){navigator.clipboard?.writeText(groupId);showToast('📋 Codice: '+groupId);}
 function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsWatch)navigator.geolocation.clearWatch(gpsWatch);removeMQTT();friends={};predMap={};show('s-landing');groupId=null;}
 
-// ════════════ TOAST ════════════
+// ══════════════════════════════════
+// TOAST
+// ══════════════════════════════════
 let tT;
 function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),2800);}
 
-// ════════════ AUTO-JOIN ════════════
+// ══════════════════════════════════
+// AUTO-JOIN
+// ══════════════════════════════════
 window.addEventListener('DOMContentLoaded',()=>{
   const c=new URLSearchParams(location.search).get('group');
   if(c){groupId=c.toUpperCase();document.getElementById('code-inp').value=groupId;buildPicker();show('s-name');showToast('🔗 Codice: '+groupId);}
