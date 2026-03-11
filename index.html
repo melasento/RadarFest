@@ -2,261 +2,191 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
 <title>Friend Compass</title>
 <script src="https://unpkg.com/mqtt@5/dist/mqtt.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-:root{
-  --bg:#050813;--bg2:#07111f;--bg3:#040c18;
-  --green:#00e87a;--cyan:#00c0ff;--orange:#ffa040;
-  --ring:#1a3a4a;--text:#e0eef5;--dim:#4a7a99;
-}
+:root{--bg:#050813;--bg2:#07111f;--bg3:#040c18;--green:#00e87a;--cyan:#00c0ff;
+      --orange:#ffa040;--ring:#1a3a4a;--text:#e0eef5;--dim:#4a7a99}
 html,body{height:100%;background:var(--bg);color:var(--text);
-  font-family:'Segoe UI','Roboto',sans-serif;overflow:hidden}
+  font-family:'Segoe UI',Roboto,sans-serif;overflow:hidden}
 body{display:flex;flex-direction:column}
-
 .screen{display:none;flex-direction:column;flex:1;overflow:hidden}
 .screen.active{display:flex}
-
-/* ─── LANDING ─── */
+/* LANDING */
 #s-landing{align-items:center;justify-content:center;gap:16px;padding:28px 20px;overflow-y:auto}
-.logo-icon{font-size:56px;line-height:1}
-.logo-title{font-size:24px;font-weight:800}
-.logo-sub{font-size:12px;color:var(--dim)}
+.logo{font-size:56px}.title{font-size:24px;font-weight:800}
+.sub{font-size:12px;color:var(--dim)}
 .card{background:var(--bg2);border:1px solid var(--ring);border-radius:16px;
       padding:18px 20px;width:100%;max-width:360px}
-.card-title{font-size:13px;font-weight:700;color:var(--cyan);margin-bottom:12px}
+.ct{font-size:13px;font-weight:700;color:var(--cyan);margin-bottom:12px}
 .field{width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--ring);
        border-radius:10px;color:var(--text);font-size:14px;outline:none;
        margin-bottom:10px;font-family:inherit}
 .field::placeholder{color:var(--dim)}
 .btn{width:100%;padding:11px;border-radius:11px;border:none;font-size:14px;
-     font-weight:700;cursor:pointer;font-family:inherit;transition:opacity .15s}
-.btn:active{opacity:.75}
-.btn-green{background:var(--green);color:#000}
-.btn-blue{background:#0077cc;color:#fff;margin-top:6px}
+     font-weight:700;cursor:pointer;font-family:inherit}
+.btn-g{background:var(--green);color:#000}
+.btn-b{background:#0077cc;color:#fff;margin-top:6px}
 .btn-ghost{background:transparent;border:1px solid var(--ring);color:var(--dim);margin-top:8px}
 .hint{color:var(--dim);font-size:11px;text-align:center}
-
-/* ─── NOME + COLORE ─── */
+/* NOME */
 #s-name{align-items:center;justify-content:center;padding:24px 20px}
 #s-name .card{max-width:360px}
-.color-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;justify-content:center}
-.swatch{width:34px;height:34px;border-radius:50%;cursor:pointer;
-        border:3px solid transparent;transition:transform .15s,border-color .15s;flex-shrink:0}
-.swatch.sel{border-color:#fff;transform:scale(1.18)}
-
-/* ─── TOPBAR ─── */
+.crow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;justify-content:center}
+.sw{width:34px;height:34px;border-radius:50%;cursor:pointer;border:3px solid transparent}
+.sw.sel{border-color:#fff;transform:scale(1.18)}
+/* TOPBAR */
 #topbar{display:flex;align-items:center;gap:6px;padding:8px 12px;
-        background:var(--bg2);border-bottom:1px solid var(--ring);
-        flex-shrink:0;min-height:46px}
-.gps-status{display:flex;align-items:center;gap:5px;flex-shrink:0}
-.gps-dot{width:8px;height:8px;border-radius:50%;background:#444;transition:all .4s}
-.gps-dot.wait{background:#f0c000;box-shadow:0 0 6px #f0c000;animation:blink 1.2s infinite}
-.gps-dot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
-.gps-dot.old{background:var(--orange);box-shadow:0 0 6px var(--orange)}
+        background:var(--bg2);border-bottom:1px solid var(--ring);flex-shrink:0}
+.gdot{width:8px;height:8px;border-radius:50%;background:#444;transition:all .4s;flex-shrink:0}
+.gdot.wait{background:#f0c000;box-shadow:0 0 6px #f0c000;animation:blink 1.2s infinite}
+.gdot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+.gdot.old{background:var(--orange);box-shadow:0 0 6px var(--orange)}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
-.gps-label{font-size:11px;color:var(--dim);white-space:nowrap}
-.divider{width:1px;height:20px;background:var(--ring);flex-shrink:0}
-.group-name{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;
-            text-overflow:ellipsis;flex:1;min-width:0}
-.code-badge{font-size:11px;color:var(--cyan);background:#0a1a2a;
-            border:1px solid #1a3a4a;padding:2px 8px;border-radius:8px;
-            letter-spacing:1.5px;cursor:pointer;flex-shrink:0;white-space:nowrap}
-.top-actions{display:flex;gap:4px;flex-shrink:0}
-.top-btn{width:32px;height:32px;border-radius:50%;border:none;cursor:pointer;
-         display:flex;align-items:center;justify-content:center;font-size:15px;
-         background:var(--bg3);color:var(--text)}
-.top-btn.green{background:#00c06033;color:var(--green)}
-.top-btn.red{background:#cc220033;color:#ff6060}
-.members-lbl{font-size:12px;color:var(--green);white-space:nowrap;flex-shrink:0}
-
-/* ─── TABS ─── */
+.glbl{font-size:11px;color:var(--dim);white-space:nowrap;flex-shrink:0}
+.dvd{width:1px;height:18px;background:var(--ring);flex-shrink:0}
+.gnm{font-size:14px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cbdg{font-size:11px;color:var(--cyan);background:#0a1a2a;border:1px solid #1a3a4a;
+      padding:2px 8px;border-radius:8px;letter-spacing:1.5px;cursor:pointer;flex-shrink:0}
+.mct{font-size:11px;color:var(--green);flex-shrink:0}
+.tacts{display:flex;gap:4px;flex-shrink:0}
+.tbtn{width:32px;height:32px;border-radius:50%;border:none;cursor:pointer;font-size:15px;
+      background:var(--bg3);color:var(--text);display:flex;align-items:center;justify-content:center}
+.tbtn.g{background:#00c06033;color:var(--green)}
+.tbtn.r{background:#cc220033;color:#ff6060}
+/* TABS */
 #tabs{display:flex;flex-shrink:0}
 .tab{flex:1;padding:8px 0;text-align:center;font-size:13px;cursor:pointer;
-     border-bottom:2px solid transparent;background:var(--bg3);color:var(--dim);
-     display:flex;align-items:center;justify-content:center;gap:6px}
+     border-bottom:2px solid transparent;background:var(--bg3);color:var(--dim)}
 .tab.active{color:var(--green);border-bottom:2px solid var(--green);background:var(--bg)}
-.tab-dot{width:8px;height:8px;border-radius:50%;background:currentColor;flex-shrink:0}
-
-/* ─── RADAR ─── */
-#radar-wrap{position:relative;flex:1;min-height:0;overflow:hidden;background:var(--bg)}
-#radar{position:absolute;inset:0;width:100%;height:100%}
-/* Etichette cardinali fisse */
-.cardinal{position:absolute;font-size:12px;font-weight:700;letter-spacing:1px;
-          pointer-events:none;color:var(--cyan)}
-#cn{top:10px;left:50%;transform:translateX(-50%)}
-#cw{top:50%;left:10px;transform:translateY(-50%)}
-#ce{top:50%;right:10px;transform:translateY(-50%)}
-
-/* ─── LISTA ─── */
-#lista-view{flex:1;overflow-y:auto;padding:12px 14px;display:none;background:var(--bg)}
+/* RADAR */
+#radar-wrap{flex:1;position:relative;overflow:hidden;background:#02040A}
+#cv{position:absolute;top:0;left:0;width:100%;height:100%}
+/* LISTA */
+#lista{flex:1;overflow-y:auto;padding:12px 14px;display:none;background:var(--bg)}
 .fr{display:flex;align-items:center;gap:12px;padding:11px 14px;margin-bottom:9px;
     background:var(--bg2);border-radius:12px;border:1px solid var(--ring)}
 .av{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;
     justify-content:center;font-weight:800;font-size:15px;flex-shrink:0;border:2.5px solid}
 .fi{flex:1;min-width:0}
-.fn{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fn{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fs{font-size:11px;color:var(--dim);margin-top:3px}
-.fd{font-size:18px;font-weight:700;white-space:nowrap;flex-shrink:0;text-align:right}
-.fd small{font-size:10px;font-weight:400;color:var(--dim);display:block}
-
-/* ─── BOTTOMBAR ─── */
-#bottombar{background:#050A14;border-top:1px solid #0a2030;padding:8px 12px;flex-shrink:0}
-#bar-active{display:flex;align-items:center;gap:6px}
-.brb-btn{flex:1;padding:9px 10px;border-radius:10px;border:none;font-size:12px;
-         font-weight:700;cursor:pointer;background:var(--orange);color:#000;font-family:inherit}
-.brb-btn.on{background:#cc4400;color:#fff}
-.wa-btn{padding:9px 12px;border-radius:10px;border:none;font-size:12px;font-weight:700;
-        cursor:pointer;background:#25D366;color:#fff;font-family:inherit;
-        display:flex;align-items:center;gap:5px;white-space:nowrap}
-.ic-btn{padding:9px 10px;background:var(--bg2);border:1px solid var(--ring);
-        color:var(--text);border-radius:10px;cursor:pointer;font-size:15px;line-height:1}
-
-/* ─── TOAST / WARN ─── */
+.fd{font-size:18px;font-weight:700;flex-shrink:0}
+/* BOTTOMBAR */
+#bb{background:#050A14;border-top:1px solid #0a2030;padding:8px 12px;flex-shrink:0}
+#bba{display:flex;align-items:center;gap:6px}
+.brbB{flex:1;padding:9px 10px;border-radius:10px;border:none;font-size:12px;
+      font-weight:700;cursor:pointer;background:var(--orange);color:#000;font-family:inherit}
+.brbB.on{background:#cc4400;color:#fff}
+.waB{padding:9px 12px;border-radius:10px;border:none;font-size:12px;font-weight:700;
+     cursor:pointer;background:#25D366;color:#fff;font-family:inherit;
+     display:flex;align-items:center;gap:5px;white-space:nowrap}
+.icB{padding:9px 10px;background:var(--bg2);border:1px solid var(--ring);
+     color:var(--text);border-radius:10px;cursor:pointer;font-size:15px}
+/* TOAST / WARN */
 #toast{position:fixed;bottom:76px;left:50%;transform:translateX(-50%);
        background:var(--green);color:#000;padding:8px 20px;border-radius:20px;
        font-size:13px;font-weight:700;opacity:0;pointer-events:none;
-       transition:opacity .3s;z-index:999;white-space:nowrap;max-width:94vw;text-align:center}
+       transition:opacity .3s;z-index:999;max-width:94vw;text-align:center}
 #toast.show{opacity:1}
-#warn{position:fixed;top:46px;left:0;right:0;background:#cc220088;
-      backdrop-filter:blur(6px);color:#fff;padding:7px 16px;text-align:center;
-      font-size:12px;font-weight:700;display:none;z-index:997}
-#warn.show{display:block;animation:pulse 1.5s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.7}}
+#warn{position:fixed;top:46px;left:0;right:0;background:#cc220099;backdrop-filter:blur(4px);
+      color:#fff;padding:7px;text-align:center;font-size:12px;font-weight:700;
+      display:none;z-index:997}
+#warn.show{display:block}
 </style>
 </head>
 <body>
 
-<!-- ─── LANDING ─── -->
+<!-- LANDING -->
 <div class="screen active" id="s-landing">
-  <div class="logo-icon">🧭</div>
-  <div class="logo-title">Friend Compass</div>
-  <div class="logo-sub">Trova i tuoi amici in tempo reale</div>
+  <div class="logo">🧭</div>
+  <div class="title">Friend Compass</div>
+  <div class="sub">Trova i tuoi amici in tempo reale</div>
   <div class="card">
-    <div class="card-title">✨ Crea un gruppo</div>
-    <button class="btn btn-green" onclick="startCreate()">Crea gruppo</button>
+    <div class="ct">✨ Crea un gruppo</div>
+    <button class="btn btn-g" onclick="startCreate()">Crea gruppo</button>
   </div>
   <div class="card">
-    <div class="card-title">🔗 Entra con codice</div>
+    <div class="ct">🔗 Entra con codice</div>
     <input class="field" id="code-inp" maxlength="8" placeholder="Codice (es. GNL8U7)" autocapitalize="characters"/>
-    <button class="btn btn-blue" onclick="startJoin()">Unisciti al gruppo</button>
+    <button class="btn btn-b" onclick="startJoin()">Unisciti al gruppo</button>
   </div>
-  <p class="hint">Nessun account richiesto • Dati eliminati all'uscita</p>
+  <p class="hint">Nessun account · Dati eliminati all'uscita</p>
 </div>
 
-<!-- ─── NOME + COLORE ─── -->
+<!-- NOME + COLORE -->
 <div class="screen" id="s-name">
   <div class="card" style="max-width:360px;margin:auto">
-    <div class="card-title">👤 Come ti chiami?</div>
-    <input class="field" id="name-inp" maxlength="20" placeholder="Il tuo nome (es. Marco)"/>
-    <div class="card-title" style="margin-top:4px">🎨 Scegli il tuo colore</div>
-    <div class="color-row" id="color-row"></div>
-    <button class="btn btn-green" onclick="confirmName()">Entra nel gruppo →</button>
+    <div class="ct">👤 Come ti chiami?</div>
+    <input class="field" id="name-inp" maxlength="20" placeholder="Es. Marco"/>
+    <div class="ct" style="margin-top:4px">🎨 Scegli colore</div>
+    <div class="crow" id="crow"></div>
+    <button class="btn btn-g" onclick="confirmName()">Entra →</button>
     <button class="btn btn-ghost" onclick="goLanding()">← Indietro</button>
   </div>
 </div>
 
-<!-- ─── RADAR SCREEN ─── -->
+<!-- RADAR SCREEN -->
 <div class="screen" id="s-radar">
-
-  <!-- TOPBAR identico allo screenshot -->
   <div id="topbar">
-    <div class="gps-status">
-      <div class="gps-dot wait" id="gps-dot"></div>
-      <div class="gps-label" id="gps-label">GPS...</div>
-    </div>
-    <div class="divider"></div>
-    <div class="group-name" id="group-lbl">Gruppo</div>
-    <div class="code-badge" id="code-badge" onclick="copyCode()">—</div>
-    <div class="members-lbl" id="mem-count">1 membro</div>
-    <div class="top-actions">
-      <button class="top-btn" onclick="showToast('🔔 Notifiche (prossimamente)')">🔔</button>
-      <button class="top-btn green" onclick="shareWA()">
+    <div class="gdot wait" id="gdot"></div>
+    <div class="glbl" id="glbl">GPS...</div>
+    <div class="dvd"></div>
+    <div class="gnm" id="gnm">Gruppo</div>
+    <div class="cbdg" id="cbdg" onclick="copyCode()">—</div>
+    <div class="mct" id="mct">1 membro</div>
+    <div class="tacts">
+      <button class="tbtn" onclick="showToast('🔔 prossimamente')">🔔</button>
+      <button class="tbtn g" onclick="shareWA()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
       </button>
-      <button class="top-btn red" onclick="leaveGroup()">✕</button>
+      <button class="tbtn r" onclick="leaveGroup()">✕</button>
     </div>
   </div>
-
-  <!-- TABS -->
   <div id="tabs">
-    <div class="tab active" id="tab-r" onclick="switchTab('r')">
-      <span class="tab-dot" style="background:#ff4444"></span> Radar
-    </div>
-    <div class="tab" id="tab-l" onclick="switchTab('l')">
-      ☰ <span id="lista-count">Lista (0)</span>
-    </div>
+    <div class="tab active" id="tab-r" onclick="switchTab('r')">🎯 Radar</div>
+    <div class="tab" id="tab-l" onclick="switchTab('l')">☰ <span id="lcnt">Lista (0)</span></div>
   </div>
-
-  <!-- RADAR CANVAS (centro in basso come nello screenshot) -->
-  <div id="radar-wrap">
-    <canvas id="radar"></canvas>
-    <div class="cardinal" id="cn">N</div>
-    <div class="cardinal" id="cw">W</div>
-    <div class="cardinal" id="ce">E</div>
-  </div>
-
-  <!-- LISTA -->
-  <div id="lista-view"></div>
-
-  <!-- BOTTOMBAR -->
-  <div id="bottombar">
-    <div id="bar-active">
-      <button class="brb-btn" id="brb-btn" onclick="toggleBrb()">⏱ BRB / Sto tornando</button>
-      <button class="wa-btn" onclick="shareWA()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-        Invita
-      </button>
-      <button class="ic-btn" onclick="copyLink()">🔗</button>
-    </div>
-  </div>
+  <div id="radar-wrap"><canvas id="cv"></canvas></div>
+  <div id="lista"></div>
+  <div id="bb"><div id="bba">
+    <button class="brbB" id="brbB" onclick="toggleBrb()">⏱ BRB / Sto tornando</button>
+    <button class="waB" onclick="shareWA()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      Invita
+    </button>
+    <button class="icB" onclick="copyLink()">🔗</button>
+  </div></div>
 </div>
 
 <div id="warn">⚠️ Un amico si è allontanato oltre 200m!</div>
 <div id="toast"></div>
 
 <script>
-// ══════════════════════════════════════════
-// MQTT — broker pubblico, zero config
-// ══════════════════════════════════════════
-const BROKER = 'wss://broker.emqx.io:8084/mqtt';
-let mqttClient = null;
+// ════════════ CONFIG ════════════
+const BROKER='wss://broker.emqx.io:8084/mqtt';
+const COLORS=['#00e87a','#00c0ff','#ff6b6b','#ffa040','#c084fc','#facc15','#f472b6','#38bdf8','#4ade80','#fb923c'];
+const SEP_THR=200,MAX_R=500;
 
-// ══════════════════════════════════════════
-// COLORI
-// ══════════════════════════════════════════
-const COLORS = ['#00e87a','#00c0ff','#ff6b6b','#ffa040',
-                '#c084fc','#facc15','#f472b6','#38bdf8',
-                '#4ade80','#fb923c'];
-let selColor = COLORS[1];
+// ════════════ STATO ════════════
+let selColor=COLORS[1],myId=null,myName='',myColor=COLORS[1],groupId=null;
+let isBrb=false,myLat=null,myLon=null,myAcc=null,gpsTs=0;
+let heading=0,friends={},predMap={};
+let gpsWatch=null,stTimer=null,mqttClient=null;
 
-// ══════════════════════════════════════════
-// STATO
-// ══════════════════════════════════════════
-let myId=null,myName='',myColor=COLORS[1],groupId=null;
-let isBrb=false,myLat=null,myLon=null,myAccuracy=null;
-let heading=0,friends={},predMap={},sweepAngle=0;
-let gpsWatch=null,stTimer=null,gpsTs=0;
-const SEP_THR=200;
-
-// ══════════════════════════════════════════
-// UTILS
-// ══════════════════════════════════════════
+// ════════════ UTILS ════════════
 const uid=()=>Math.random().toString(36).substr(2,9)+Date.now().toString(36);
 const rndCode=()=>Math.random().toString(36).substr(2,6).toUpperCase();
 const d2r=d=>d*Math.PI/180;
-function hex2rgba(h,a){
-  const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);
-  return `rgba(${r},${g},${b},${a})`;
-}
+function hex2rgba(h,a){const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return `rgba(${r},${g},${b},${a})`;}
 function distBear(la1,lo1,la2,lo2){
   const R=6371000,f1=d2r(la1),f2=d2r(la2),df=d2r(la2-la1),dl=d2r(lo2-lo1);
   const a=Math.sin(df/2)**2+Math.cos(f1)*Math.cos(f2)*Math.sin(dl/2)**2;
   const dist=R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
   const y=Math.sin(dl)*Math.cos(f2),x=Math.cos(f1)*Math.sin(f2)-Math.sin(f1)*Math.cos(f2)*Math.cos(dl);
-  return {dist,bearing:(Math.atan2(y,x)*180/Math.PI+360)%360};
+  return{dist,bearing:(Math.atan2(y,x)*180/Math.PI+360)%360};
 }
 const cardinal=b=>['N','NE','E','SE','S','SO','O','NO'][Math.round(b/45)%8];
 function predictPos(f){
@@ -264,35 +194,25 @@ function predictPos(f){
   if(!p||f.lat===null)return{lat:f.lat,lon:f.lon};
   const dt=(Date.now()-(f.ts||0))/1000;
   if(dt<20)return{lat:f.lat,lon:f.lon};
-  const ds=(f.ts-p.ts)/1000;
-  if(ds<=0)return{lat:f.lat,lon:f.lon};
+  const ds=(f.ts-p.ts)/1000;if(ds<=0)return{lat:f.lat,lon:f.lon};
   const cl=Math.min(dt,30);
   return{lat:f.lat+(f.lat-p.lat)/ds*cl,lon:f.lon+(f.lon-p.lon)/ds*cl};
 }
 
-// ══════════════════════════════════════════
-// COLOR PICKER
-// ══════════════════════════════════════════
+// ════════════ COLOR PICKER ════════════
 function buildPicker(){
-  const el=document.getElementById('color-row');el.innerHTML='';
+  const el=document.getElementById('crow');el.innerHTML='';
   COLORS.forEach(c=>{
     const s=document.createElement('div');
-    s.className='swatch'+(c===selColor?' sel':'');
-    s.style.background=c;
-    s.onclick=()=>{selColor=c;document.querySelectorAll('.swatch').forEach(x=>x.classList.remove('sel'));s.classList.add('sel');};
+    s.className='sw'+(c===selColor?' sel':'');s.style.background=c;
+    s.onclick=()=>{selColor=c;document.querySelectorAll('.sw').forEach(x=>x.classList.remove('sel'));s.classList.add('sel');};
     el.appendChild(s);
   });
 }
 
-// ══════════════════════════════════════════
-// NAV
-// ══════════════════════════════════════════
+// ════════════ NAVIGAZIONE ════════════
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
 function goLanding(){show('s-landing');groupId=null;}
-
-// ══════════════════════════════════════════
-// LANDING
-// ══════════════════════════════════════════
 function startCreate(){groupId=rndCode();buildPicker();show('s-name');setTimeout(()=>document.getElementById('name-inp').focus(),80);}
 function startJoin(){
   const c=document.getElementById('code-inp').value.trim().toUpperCase();
@@ -305,13 +225,13 @@ function confirmName(){
   myName=n;myColor=selColor;myId=uid();enterGroup();
 }
 
-// ══════════════════════════════════════════
-// ENTRA NEL GRUPPO
-// ══════════════════════════════════════════
+// ════════════ ENTRA NEL GRUPPO ════════════
 function enterGroup(){
   show('s-radar');
-  document.getElementById('code-badge').textContent=groupId;
-  document.getElementById('group-lbl').textContent='Festival';
+  document.getElementById('cbdg').textContent=groupId;
+  document.getElementById('gnm').textContent='Gruppo '+groupId;
+  // IMPORTANTE: ridimensiona il canvas DOPO che la schermata è visibile
+  setTimeout(()=>{fixCanvas();},50);
   connectMQTT();startGps();
   if(window.DeviceOrientationEvent){
     window.addEventListener('deviceorientationabsolute',onOrient,true);
@@ -319,19 +239,182 @@ function enterGroup(){
   }
 }
 
-// ══════════════════════════════════════════
-// MQTT
-// ══════════════════════════════════════════
+// ════════════ CANVAS ════════════
+const cv=document.getElementById('cv');
+const ctx=cv.getContext('2d');
+let sweepAngle=0;
+
+function fixCanvas(){
+  const wrap=document.getElementById('radar-wrap');
+  // Usa le dimensioni reali del wrapper (ora visibile)
+  cv.width=wrap.offsetWidth;
+  cv.height=wrap.offsetHeight;
+}
+window.addEventListener('resize',fixCanvas);
+
+// ════════════ DRAW RADAR ════════════
+function draw(){
+  const W=cv.width,H=cv.height;
+  if(!W||!H){fixCanvas();return;}
+  const cx=W/2,cy=H/2,R=Math.min(W,H)/2-14;
+  ctx.clearRect(0,0,W,H);
+
+  // BG
+  const bg=ctx.createRadialGradient(cx,cy,0,cx,cy,R);
+  bg.addColorStop(0,'#071d2a');bg.addColorStop(0.7,'#040e16');bg.addColorStop(1,'#020409');
+  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fillStyle=bg;ctx.fill();
+
+  // Sweep (scia + cono + linea)
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(sweepAngle);
+  // scia
+  for(let i=0;i<8;i++){
+    ctx.beginPath();ctx.moveTo(0,0);
+    const a0=-Math.PI/2-0.9+i*0.11,a1=-Math.PI/2-0.9+(i+1)*0.11;
+    ctx.arc(0,0,R,a0,a1);ctx.closePath();
+    ctx.fillStyle=`rgba(0,200,100,${0.01+i*0.012})`;ctx.fill();
+  }
+  // cono
+  ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,-Math.PI/2-0.2,-Math.PI/2+0.2);ctx.closePath();
+  const cg=ctx.createLinearGradient(0,-R,0,0);
+  cg.addColorStop(0,'rgba(0,232,122,0.30)');cg.addColorStop(1,'rgba(0,232,122,0.02)');
+  ctx.fillStyle=cg;ctx.fill();
+  // linea
+  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-R);
+  ctx.strokeStyle='#00e87a';ctx.lineWidth=2;ctx.stroke();
+  ctx.restore();
+
+  // Cerchi
+  [1/3,2/3,1].forEach(f=>{
+    ctx.beginPath();ctx.arc(cx,cy,R*f,0,Math.PI*2);
+    ctx.strokeStyle='#1a3a4a';ctx.lineWidth=1;ctx.stroke();
+    ctx.fillStyle='#3a7a8a';ctx.font='10px sans-serif';ctx.textAlign='center';
+    ctx.fillText(Math.round(MAX_R*f)+'m',cx,cy-R*f+13);
+  });
+
+  // Linee cardinali
+  ctx.strokeStyle='#1a3a4a99';ctx.lineWidth=0.8;
+  [[0,-1],[0,1],[1,0],[-1,0]].forEach(([dx,dy])=>{
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx*R,cy+dy*R);ctx.stroke();
+  });
+  ctx.setLineDash([2,5]);
+  const s=0.707;[[1,-1],[1,1],[-1,1],[-1,-1]].forEach(([dx,dy])=>{
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx*R*s,cy+dy*R*s);ctx.stroke();
+  });ctx.setLineDash([]);
+
+  // Amici — prima le linee e i dot (dentro clip), poi le label fuori
+  const now=Date.now();
+  const flist=Object.values(friends).filter(f=>f.lat!==null&&myLat!==null);
+  // Clip per dot
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,R-1,0,Math.PI*2);ctx.clip();
+  flist.forEach(f=>{
+    const pr=predictPos(f);
+    const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
+    const r=R*Math.min(dist/MAX_R,0.96);
+    const ar=d2r(bearing-heading)-Math.PI/2;
+    const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
+    const col=f.brb?'#ffa040':(f.color||'#00c0ff');
+    const fc=(now-(f.ts||0))>25000?'#778899':col;
+    // Linea
+    ctx.save();ctx.setLineDash([3,6]);
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);
+    ctx.strokeStyle=fc+'55';ctx.lineWidth=1;ctx.stroke();ctx.restore();
+    // Dot
+    ctx.beginPath();ctx.arc(fx,fy,6,0,Math.PI*2);
+    ctx.fillStyle=fc;ctx.shadowColor=fc;ctx.shadowBlur=14;ctx.fill();ctx.shadowBlur=0;
+    ctx.beginPath();ctx.arc(fx,fy,11,0,Math.PI*2);ctx.strokeStyle=fc+'44';ctx.lineWidth=1.5;ctx.stroke();
+  });
+  ctx.restore();
+
+  // Label amici (fuori clip, posizionate verso il centro)
+  flist.forEach(f=>{
+    const pr=predictPos(f);
+    const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
+    const r=R*Math.min(dist/MAX_R,0.96);
+    const ar=d2r(bearing-heading)-Math.PI/2;
+    const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
+    const col=f.brb?'#ffa040':(f.color||'#00c0ff');
+    const fc=(now-(f.ts||0))>25000?'#778899':col;
+    const nm=f.name||'?';const ds=Math.round(dist)+'m';
+    ctx.font='bold 11px sans-serif';
+    const tw=Math.max(ctx.measureText(nm).width,ctx.measureText(ds).width)+10;
+    const th=f.brb?38:28;
+    // Scegli lato: verso il centro del canvas
+    const lx=fx<cx?fx-tw-6:fx+14;
+    const ly=fy-10;
+    // Sfondo etichetta
+    ctx.fillStyle='rgba(2,4,14,0.80)';
+    ctx.fillRect(lx-2,ly,tw+2,th);
+    // Testo
+    ctx.fillStyle='#ffffffee';ctx.font='bold 11px sans-serif';ctx.textAlign='left';
+    ctx.fillText(nm,lx,ly+13);
+    ctx.fillStyle=fc;ctx.font='10px sans-serif';ctx.fillText(ds,lx,ly+25);
+    if(f.brb){ctx.fillStyle='#ffa040';ctx.font='9px sans-serif';ctx.fillText('⏱ BRB',lx,ly+36);}
+  });
+
+  // Punto IO (sopra tutto)
+  ctx.beginPath();ctx.arc(cx,cy,7,0,Math.PI*2);
+  ctx.fillStyle=myColor;ctx.shadowColor=myColor;ctx.shadowBlur=18;ctx.fill();ctx.shadowBlur=0;
+  ctx.beginPath();ctx.arc(cx,cy,13,0,Math.PI*2);ctx.strokeStyle=myColor+'55';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.fillStyle='#ffffffcc';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+  ctx.fillText(myName||'Io',cx,cy-18);ctx.textAlign='left';
+
+  // Bordo + cardinali
+  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.strokeStyle='#1a3a4a';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='#00c0ffcc';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+  ctx.fillText('N',cx,cy-R+20);ctx.fillText('S',cx,cy+R-8);
+  ctx.textAlign='left';ctx.fillText('O',cx-R+8,cy+5);
+  ctx.textAlign='right';ctx.fillText('E',cx+R-8,cy+5);
+  ctx.textAlign='left';
+}
+
+// ════════════ LOOP — semplicissimo, indistruttibile ════════════
+let prevT=0;
+function loop(t){
+  const dt=(t-prevT)/1000;
+  prevT=t;
+  // Incrementa solo se dt ragionevole (tab non era in background)
+  if(dt>0&&dt<0.5) sweepAngle+=dt*1.2;
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop); // parte subito, gira sempre
+
+// ════════════ GPS ════════════
+function startGps(){
+  if(!navigator.geolocation){showToast('⚠️ GPS non supportato');return;}
+  const dot=document.getElementById('gdot'),lbl=document.getElementById('glbl');
+  dot.className='gdot wait';lbl.textContent='GPS...';
+  gpsWatch=navigator.geolocation.watchPosition(pos=>{
+    const lat=pos.coords.latitude,lon=pos.coords.longitude,acc=Math.round(pos.coords.accuracy);
+    gpsTs=Date.now();dot.className='gdot ok';lbl.textContent='GPS ±'+acc+'m';
+    if(myLat!==null){
+      const d=distBear(myLat,myLon,lat,lon).dist;
+      if(d<2){if(!stTimer)stTimer=setTimeout(()=>{navigator.geolocation.clearWatch(gpsWatch);dot.className='gdot old';lbl.textContent='GPS fermo';},60000);}
+      else{clearTimeout(stTimer);stTimer=null;}
+    }
+    myLat=lat;myLon=lon;myAcc=acc;publishPos();
+  },e=>{document.getElementById('gdot').className='gdot';document.getElementById('glbl').textContent='GPS off';},
+  {enableHighAccuracy:true,maximumAge:5000,timeout:20000});
+}
+setInterval(()=>{
+  if(!gpsTs||!myLat)return;
+  if((Date.now()-gpsTs)>30000){
+    document.getElementById('gdot').className='gdot old';
+    document.getElementById('glbl').textContent='GPS vecchio ±'+(myAcc||'?')+'m';
+  }
+},5000);
+function onOrient(e){const h=e.absolute?e.alpha:(e.webkitCompassHeading||e.alpha||0);if(h!=null)heading=h;}
+
+// ════════════ MQTT ════════════
 function connectMQTT(){
   mqttClient=mqtt.connect(BROKER,{clientId:'fc_'+myId,clean:true,reconnectPeriod:3000,keepalive:30});
   mqttClient.on('connect',()=>{
     mqttClient.subscribe(`fc/${groupId}/#`);
-    publishMember();
-    showToast('🎉 Nel gruppo '+groupId);
+    publishMember();showToast('🎉 Nel gruppo '+groupId);
   });
   mqttClient.on('message',(topic,payload)=>{
     try{
-      const parts=topic.split('/'),type=parts[2],uid2=parts[3];
+      const pts=topic.split('/'),type=pts[2],uid2=pts[3];
       if(uid2===myId)return;
       const data=JSON.parse(payload.toString());
       if(!friends[uid2])friends[uid2]={id:uid2,lat:null,lon:null,ts:0};
@@ -355,60 +438,26 @@ function publishMember(){
 }
 function publishPos(){
   if(!mqttClient||myLat===null)return;
-  mqttClient.publish(`fc/${groupId}/pos/${myId}`,JSON.stringify({lat:myLat,lon:myLon,ts:Date.now(),acc:myAccuracy}),{retain:true,qos:0});
+  mqttClient.publish(`fc/${groupId}/pos/${myId}`,JSON.stringify({lat:myLat,lon:myLon,ts:Date.now(),acc:myAcc}),{retain:true,qos:0});
 }
 function removeMQTT(){
   if(!mqttClient)return;
-  const empty=new Uint8Array(0);
-  mqttClient.publish(`fc/${groupId}/member/${myId}`,empty,{retain:true,qos:1});
-  mqttClient.publish(`fc/${groupId}/pos/${myId}`,empty,{retain:true,qos:1});
+  const e=new Uint8Array(0);
+  mqttClient.publish(`fc/${groupId}/member/${myId}`,e,{retain:true,qos:1});
+  mqttClient.publish(`fc/${groupId}/pos/${myId}`,e,{retain:true,qos:1});
   mqttClient.end();
 }
 
-// ══════════════════════════════════════════
-// GPS
-// ══════════════════════════════════════════
-function startGps(){
-  if(!navigator.geolocation){showToast('⚠️ GPS non supportato');return;}
-  const dot=document.getElementById('gps-dot'),lbl=document.getElementById('gps-label');
-  dot.className='gps-dot wait';lbl.textContent='GPS...';
-  gpsWatch=navigator.geolocation.watchPosition(pos=>{
-    const lat=pos.coords.latitude,lon=pos.coords.longitude,acc=Math.round(pos.coords.accuracy);
-    gpsTs=Date.now();
-    dot.className='gps-dot ok';
-    lbl.textContent='GPS ±'+acc+'m';
-    if(myLat!==null){
-      const d=distBear(myLat,myLon,lat,lon).dist;
-      if(d<2){if(!stTimer)stTimer=setTimeout(()=>{navigator.geolocation.clearWatch(gpsWatch);dot.className='gps-dot old';lbl.textContent='GPS fermo';},60000);}
-      else{clearTimeout(stTimer);stTimer=null;}
-    }
-    myLat=lat;myLon=lon;myAccuracy=acc;
-    publishPos();
-  },e=>{dot.className='gps-dot';document.getElementById('gps-label').textContent='GPS off';},
-  {enableHighAccuracy:true,maximumAge:5000,timeout:20000});
-}
-// Aggiorna label GPS "vecchio" se nessun fix da >30s
-setInterval(()=>{
-  if(!gpsTs||!myLat)return;
-  const age=Math.round((Date.now()-gpsTs)/1000);
-  if(age>30){document.getElementById('gps-dot').className='gps-dot old';document.getElementById('gps-label').textContent='GPS vecchio ±'+(myAccuracy||'?')+'m';}
-},5000);
-function onOrient(e){const h=e.absolute?e.alpha:(e.webkitCompassHeading||e.alpha||0);if(h!==null)heading=h;}
-
-// ══════════════════════════════════════════
-// BRB
-// ══════════════════════════════════════════
+// ════════════ BRB ════════════
 function toggleBrb(){
   isBrb=!isBrb;
-  const b=document.getElementById('brb-btn');
+  const b=document.getElementById('brbB');
   b.textContent=isBrb?'▶ Fine BRB':'⏱ BRB / Sto tornando';
-  b.classList.toggle('on',isBrb);
-  publishMember();showToast(isBrb?'⏱ BRB attivato':'✅ Sei tornato!');
+  b.classList.toggle('on',isBrb);publishMember();
+  showToast(isBrb?'⏱ BRB attivato':'✅ Sei tornato!');
 }
 
-// ══════════════════════════════════════════
-// SEPARAZIONE
-// ══════════════════════════════════════════
+// ════════════ SEPARAZIONE ════════════
 function checkSep(){
   if(myLat===null)return;
   let w=false;
@@ -417,249 +466,55 @@ function checkSep(){
   if(w&&navigator.vibrate)navigator.vibrate([200,100,200]);
 }
 
-// ══════════════════════════════════════════
-// UI UPDATE
-// ══════════════════════════════════════════
+// ════════════ UI ════════════
 function updateUI(){
   const cnt=Object.keys(friends).length;
-  document.getElementById('mem-count').textContent=(cnt+1)+' memb.';
-  document.getElementById('lista-count').textContent='Lista ('+cnt+')';
+  document.getElementById('mct').textContent=(cnt+1)+' memb.';
+  document.getElementById('lcnt').textContent='Lista ('+cnt+')';
   renderLista();
 }
-
-// ══════════════════════════════════════════
-// TABS
-// ══════════════════════════════════════════
 function switchTab(t){
   const r=t==='r';
   document.getElementById('radar-wrap').style.display=r?'block':'none';
-  document.getElementById('lista-view').style.display=r?'none':'block';
+  document.getElementById('lista').style.display=r?'none':'block';
   document.getElementById('tab-r').classList.toggle('active',r);
   document.getElementById('tab-l').classList.toggle('active',!r);
-  if(r)resizeCanvas();
+  if(r)setTimeout(fixCanvas,30);
 }
-
-// ══════════════════════════════════════════
-// LISTA
-// ══════════════════════════════════════════
 function renderLista(){
-  const el=document.getElementById('lista-view'),list=Object.values(friends);
-  if(!list.length){
-    el.innerHTML=`<div style="color:var(--dim);text-align:center;margin-top:60px;font-size:13px;line-height:2">
-      Nessun amico nel gruppo.<br>
-      Condividi il codice <b style="color:var(--cyan)">${groupId}</b><br>
-      o usa il pulsante WhatsApp.</div>`;return;
-  }
+  const el=document.getElementById('lista'),list=Object.values(friends);
+  if(!list.length){el.innerHTML=`<div style="color:var(--dim);text-align:center;margin-top:60px;font-size:13px;line-height:2">Nessun amico.<br>Condividi il codice <b style="color:var(--cyan)">${groupId}</b></div>`;return;}
   el.innerHTML=list.map(f=>{
     const col=f.color||'#00c0ff',pr=predictPos(f);
     const db2=(pr.lat&&myLat)?distBear(myLat,myLon,pr.lat,pr.lon):null;
-    const ds=db2?Math.round(db2.dist)+'m':'—',dr=db2?cardinal(db2.bearing):' ';
-    const stale=f.ts&&(Date.now()-f.ts)>25000;
+    const ds=db2?Math.round(db2.dist)+'m':'—',dr=db2?cardinal(db2.bearing):'—';
     return `<div class="fr">
       <div class="av" style="border-color:${col};color:${col};background:${hex2rgba(col,.15)}">${(f.name||'?')[0].toUpperCase()}</div>
-      <div class="fi">
-        <div class="fn">${f.name||'Amico'}${f.brb?' <span style="color:var(--orange)">⏱</span>':''}</div>
-        <div class="fs">${dr} · ${stale?'<span style="color:var(--orange)">GPS vecchio</span>':'GPS live'}</div>
-      </div>
-      <div class="fd" style="color:${f.brb?'var(--orange)':col}">${ds}<small>${dr}</small></div>
+      <div class="fi"><div class="fn">${f.name||'Amico'}${f.brb?' ⏱':''}</div><div class="fs">${dr} · GPS</div></div>
+      <div class="fd" style="color:${f.brb?'var(--orange)':col}">${ds}</div>
     </div>`;
   }).join('');
 }
 
-// ══════════════════════════════════════════
-// RADAR — centro in basso come nello screenshot
-// ══════════════════════════════════════════
-const canvas=document.getElementById('radar');
-const ctx=canvas.getContext('2d');
-
-function resizeCanvas(){
-  const wrap=document.getElementById('radar-wrap');
-  canvas.width=wrap.clientWidth||window.innerWidth;
-  canvas.height=wrap.clientHeight||(window.innerHeight*0.65);
-}
-window.addEventListener('resize',()=>{resizeCanvas();});
-resizeCanvas();
-
-function drawRadar(){
-  const W=canvas.width,H=canvas.height;
-  if(!W||!H)return;
-  // Centro al CENTRO del canvas — cerchio completo visibile
-  const cx=W/2, cy=H/2;
-  const R=Math.min(W,H)/2 - 16;
-  const MR=500;
-  ctx.clearRect(0,0,W,H);
-
-  // ── Clip tutto dentro il cerchio ──
-  ctx.save();
-  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.clip();
-
-  // ── Sfondo ──
-  const bg=ctx.createRadialGradient(cx,cy,0,cx,cy,R);
-  bg.addColorStop(0,'#071d2a');bg.addColorStop(0.6,'#040e16');bg.addColorStop(1,'#02040A');
-  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
-
-  // ── Sweep PRIMA dei cerchi (sotto) ──
-  ctx.save();ctx.translate(cx,cy);ctx.rotate(sweepAngle);
-  // Scia lunga
-  ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,-Math.PI/2-1.2,-Math.PI/2);ctx.closePath();
-  const tg=ctx.createLinearGradient(0,-R,0,0);
-  tg.addColorStop(0,'rgba(0,200,100,0.10)');tg.addColorStop(1,'rgba(0,200,100,0)');
-  ctx.fillStyle=tg;ctx.fill();
-  // Cono luminoso
-  ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,-Math.PI/2-0.25,-Math.PI/2+0.25);ctx.closePath();
-  const cg=ctx.createLinearGradient(0,-R,0,0);
-  cg.addColorStop(0,'rgba(0,232,122,0.28)');cg.addColorStop(1,'rgba(0,232,122,0)');
-  ctx.fillStyle=cg;ctx.fill();
-  // Linea sweep
-  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-R);
-  ctx.strokeStyle='#00e87a';ctx.lineWidth=2;ctx.stroke();
-  ctx.restore();
-
-  // ── Cerchi concentrici ──
-  [1/3,2/3,1].forEach(f=>{
-    ctx.beginPath();ctx.arc(cx,cy,R*f,0,Math.PI*2);
-    ctx.strokeStyle='#1a3a4a';ctx.lineWidth=1;ctx.stroke();
-    ctx.fillStyle='#4a8a9a';ctx.font='10px sans-serif';ctx.textAlign='center';
-    ctx.fillText(Math.round(MR*f)+'m',cx,cy-R*f+13);
-  });
-
-  // ── Linee cardinali ──
-  ctx.strokeStyle='#1a3a4a99';ctx.lineWidth=0.8;
-  [[0,-1],[0,1],[1,0],[-1,0]].forEach(([dx,dy])=>{
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx*R,cy+dy*R);ctx.stroke();
-  });
-  ctx.setLineDash([2,5]);
-  [[1,-1],[1,1],[-1,1],[-1,-1]].forEach(([dx,dy])=>{
-    const s=0.707;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx*R*s,cy+dy*R*s);ctx.stroke();
-  });
-  ctx.setLineDash([]);
-
-  // ── Linee amici + dot (dentro clip) ──
-  const now=Date.now();
-  Object.values(friends).forEach(f=>{
-    if(f.lat===null||myLat===null)return;
-    const pr=predictPos(f);
-    const {dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
-    const r=R*Math.min(dist/MR,0.96);
-    const ar=d2r(bearing-heading)-Math.PI/2;
-    const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
-    const col=f.brb?'#ffa040':(f.color||'#00c0ff');
-    const fc=(now-(f.ts||0))>25000?'#888899':col;
-    // Linea tratteggiata
-    ctx.save();ctx.setLineDash([3,6]);
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);
-    ctx.strokeStyle=fc+'55';ctx.lineWidth=1;ctx.stroke();ctx.restore();
-    // Dot
-    ctx.beginPath();ctx.arc(fx,fy,6,0,Math.PI*2);
-    ctx.fillStyle=fc;ctx.shadowColor=fc;ctx.shadowBlur=14;ctx.fill();ctx.shadowBlur=0;
-    ctx.beginPath();ctx.arc(fx,fy,11,0,Math.PI*2);ctx.strokeStyle=fc+'55';ctx.lineWidth=1.5;ctx.stroke();
-  });
-
-  ctx.restore(); // fine clip
-
-  // ── Label amici FUORI clip (sempre leggibili, mai tagliate) ──
-  Object.values(friends).forEach(f=>{
-    if(f.lat===null||myLat===null)return;
-    const pr=predictPos(f);
-    const {dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
-    const r=R*Math.min(dist/MR,0.96);
-    const ar=d2r(bearing-heading)-Math.PI/2;
-    const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
-    const col=f.brb?'#ffa040':(f.color||'#00c0ff');
-    const fc=(Date.now()-(f.ts||0))>25000?'#888899':col;
-    // Posiziona label verso il centro per non uscire dal cerchio
-    const towardCx=fx+(cx-fx)*0.3, towardCy=fy+(cy-fy)*0.3;
-    // Offset: a destra se sinistra del centro, a sinistra se destra
-    const offX=fx<cx?-60:14, offY=-6;
-    const lx=fx+offX, ly=fy+offY;
-    // Sfondo semitrasparente per leggibilità
-    const label=f.name||'?';
-    const distLbl=Math.round(dist)+'m';
-    ctx.font='bold 11px sans-serif';
-    const tw=Math.max(ctx.measureText(label).width,ctx.measureText(distLbl).width);
-    ctx.fillStyle='rgba(2,4,10,0.72)';
-    ctx.beginPath();ctx.roundRect(lx-3,ly-12,tw+10,f.brb?36:26,5);ctx.fill();
-    ctx.fillStyle='#ffffffee';ctx.fillText(label,lx,ly);
-    ctx.font='10px sans-serif';ctx.fillStyle=fc;ctx.fillText(distLbl,lx,ly+12);
-    if(f.brb){ctx.font='9px sans-serif';ctx.fillStyle='#ffa040';ctx.fillText('⏱ BRB',lx,ly+23);}
-  });
-
-  // ── Punto IO (sopra tutto) ──
-  ctx.beginPath();ctx.arc(cx,cy,7,0,Math.PI*2);
-  ctx.fillStyle=myColor;ctx.shadowColor=myColor;ctx.shadowBlur=18;ctx.fill();ctx.shadowBlur=0;
-  ctx.beginPath();ctx.arc(cx,cy,13,0,Math.PI*2);ctx.strokeStyle=myColor+'55';ctx.lineWidth=1.5;ctx.stroke();
-  ctx.fillStyle='#ffffffcc';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
-  ctx.fillText(myName||'Io',cx,cy-18);ctx.textAlign='left';
-
-  // ── Bordo cerchio ──
-  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);
-  ctx.strokeStyle='#1a3a4a';ctx.lineWidth=2;ctx.stroke();
-
-  // ── Etichette cardinali fisse ──
-  ctx.fillStyle='#00c0ffcc';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
-  ctx.fillText('N',cx,cy-R+22);
-  ctx.fillText('S',cx,cy+R-10);
-  ctx.textAlign='left';
-  ctx.fillText('O',cx-R+8,cy+4);
-  ctx.textAlign='right';
-  ctx.fillText('E',cx+R-8,cy+4);
-  ctx.textAlign='left';
-}
-
-// ── LOOP robusto ──
-let lastT=0,animId=null;
-function startLoop(){
-  if(animId)return;
-  function loop(t){
-    const dt=Math.min((t-lastT)/1000,0.1);lastT=t;
-    sweepAngle+=dt*1.1;
-    drawRadar();
-    animId=requestAnimationFrame(loop);
-  }
-  animId=requestAnimationFrame(loop);
-}
-startLoop();
-
-// ══════════════════════════════════════════
-// SHARE
-// ══════════════════════════════════════════
-function getUrl(){
-  const o=location.origin;
-  if(!o||o==='null'||o.startsWith('file'))return null;
-  return o+location.pathname+'?group='+groupId;
-}
+// ════════════ SHARE ════════════
+function getUrl(){const o=location.origin;if(!o||o==='null'||o.startsWith('file'))return null;return o+location.pathname+'?group='+groupId;}
 function shareWA(){
   const url=getUrl();
-  const msg=url
-    ?'🧭 *Friend Compass*\nUnisciti al gruppo *'+groupId+'*!\n\n'+url
-    :'🧭 *Friend Compass*\nApri l\'app e inserisci il codice: *'+groupId+'*';
-  if(navigator.share&&url)navigator.share({title:'Friend Compass',text:'Gruppo: '+groupId,url}).catch(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'));
+  const msg=url?'🧭 *Friend Compass*\nUnisciti al gruppo *'+groupId+'*!\n\n'+url:'🧭 *Friend Compass*\nCodice: *'+groupId+'*';
+  if(navigator.share&&url)navigator.share({title:'Friend Compass',url}).catch(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'));
   else window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
 }
-function copyLink(){
-  const url=getUrl();
-  if(!url){showToast('⚠️ Serve HTTPS — pubblica su Netlify');return;}
-  navigator.clipboard?.writeText(url);showToast('🔗 Link copiato!');
-}
+function copyLink(){const url=getUrl();if(!url){showToast('⚠️ Serve HTTPS');return;}navigator.clipboard?.writeText(url);showToast('🔗 Link copiato!');}
 function copyCode(){navigator.clipboard?.writeText(groupId);showToast('📋 Codice: '+groupId);}
-function leaveGroup(){
-  if(!confirm('Uscire dal gruppo?'))return;
-  if(gpsWatch)navigator.geolocation.clearWatch(gpsWatch);
-  removeMQTT();friends={};predMap={};show('s-landing');groupId=null;
-}
+function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsWatch)navigator.geolocation.clearWatch(gpsWatch);removeMQTT();friends={};predMap={};show('s-landing');groupId=null;}
 
-// ══════════════════════════════════════════
-// TOAST
-// ══════════════════════════════════════════
+// ════════════ TOAST ════════════
 let tT;
 function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),2800);}
 
-// ══════════════════════════════════════════
-// AUTO-JOIN DA ?group=CODICE
-// ══════════════════════════════════════════
+// ════════════ AUTO-JOIN ════════════
 window.addEventListener('DOMContentLoaded',()=>{
-  const p=new URLSearchParams(location.search);
-  const c=p.get('group');
+  const c=new URLSearchParams(location.search).get('group');
   if(c){groupId=c.toUpperCase();document.getElementById('code-inp').value=groupId;buildPicker();show('s-name');showToast('🔗 Codice: '+groupId);}
 });
 </script>
