@@ -261,7 +261,7 @@ function updateSmoothedPos(id, newLat, newLon, acc){
   const A = acc||40; // accuratezza dichiarata dal telefono in metri
 
   // Dead zone adattiva: metà dell'accuratezza (sotto questo = puro rumore)
-  const DEAD_ZONE = Math.max(A * 1.0, 25); // = tutta l'accuratezza dichiarata, minimo 25m
+  const DEAD_ZONE = Math.max(A * 0.8, 30); // minimo assoluto 30m — sotto questa soglia = rumore
   // Salto reale: oltre 3× l'accuratezza = l'amico si è davvero spostato
   const JUMP_THR = Math.max(A * 3, 80);
   // Peso adattivo: GPS preciso (acc=10) → peso=0.9, impreciso (acc=80) → peso=0.15
@@ -393,7 +393,7 @@ function draw(){
   ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fillStyle=bg;ctx.fill();
 
   // ══ CONTESTO RUOTATO — tutto ruota con la bussola (heading-up) ══
-  const cRad=d2r(compassHeading);
+  const cRad=d2r(compassActive?displayHeading:0);
   ctx.save();
   ctx.translate(cx,cy);
   ctx.rotate(-cRad); // radar heading-up: top = direzione attuale
@@ -449,7 +449,7 @@ function draw(){
     const{dist:vDist,bearing:vBear}=distBear(myLat,myLon,vp.lat,vp.lon);
     const r=R*Math.min(vDist/MAX_R,0.96);
     // Angolo heading-up: sottraiamo compassHeading per allineare con la griglia ruotata
-    const ar=d2r(vBear-compassHeading)-Math.PI/2;
+    const ar=d2r(vBear-(compassActive?displayHeading:0))-Math.PI/2;
     f._fx=cx+r*Math.cos(ar);
     f._fy=cy+r*Math.sin(ar);
     const col=f.color||'#00c0ff';
@@ -522,7 +522,7 @@ function draw(){
 
   // Indicatore heading in basso a destra
   if(compassActive){
-    const hDeg=Math.round(compassHeading);
+    const hDeg=Math.round(displayHeading);
     ctx.fillStyle='rgba(2,4,14,0.75)';ctx.fillRect(W-48,H-22,46,18);
     ctx.fillStyle='#ffa040';ctx.font='bold 11px sans-serif';ctx.textAlign='right';
     ctx.fillText(hDeg+'°',W-6,H-8);ctx.textAlign='left';
@@ -547,7 +547,35 @@ function draw(){
 // LOOP
 // ══════════════════════════════════
 let prevT=0,lastDraw=0;
-const FRAME_MS=1000/20; // 20fps: fluido, niente tremore
+const FRAME_MS=1000/15; // 15fps: abbastanza fluido, molto stabile
+
+// Heading visualizzato — si aggiorna solo con isteresi (no micro-tremore)
+let displayHeading=0;      // heading attualmente mostrato sul radar
+let headingTarget=0;       // target verso cui ci stiamo muovendo
+let headingMoving=false;   // true = stiamo ruotando verso un nuovo target
+
+function updateDisplayHeading(){
+  if(!compassActive)return;
+  // Quantizza il target a passi di 5°
+  headingTarget=Math.round(compassHeading/5)*5;
+  let diff=headingTarget-displayHeading;
+  while(diff>180)diff-=360;while(diff<-180)diff+=360;
+
+  if(!headingMoving && Math.abs(diff)>8){
+    // Inizia rotazione solo se cambio > 8° (isteresi alta: ignora tremore)
+    headingMoving=true;
+  }
+  if(headingMoving){
+    // Interpolazione veloce verso target
+    displayHeading=lerpAngle(displayHeading,headingTarget,0.12);
+    let remaining=headingTarget-displayHeading;
+    while(remaining>180)remaining-=360;while(remaining<-180)remaining+=360;
+    if(Math.abs(remaining)<0.5){
+      displayHeading=headingTarget;
+      headingMoving=false; // arrivato, smette di muoversi
+    }
+  }
+}
 
 function loop(t){
   requestAnimationFrame(loop);
@@ -556,7 +584,8 @@ function loop(t){
   if(compassActive){
     let diff=rawHeading-compassHeading;
     while(diff>180)diff-=360;while(diff<-180)diff+=360;
-    if(Math.abs(diff)>1.5) compassHeading=lerpAngle(compassHeading,rawHeading,0.03);
+    if(Math.abs(diff)>1.5) compassHeading=lerpAngle(compassHeading,rawHeading,0.04);
+    updateDisplayHeading();
   }
   if(t-lastDraw>=FRAME_MS){lastDraw=t;draw();}
 }
