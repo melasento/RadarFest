@@ -368,21 +368,21 @@ function handleRadarTap(tx,ty){
   // Tap sul dot IO → aggiorna GPS
   if(Math.sqrt((tx-cx)**2+(ty-cy)**2)<28){forceGpsUpdate();return;}
   // Tap su un dot amico → attiva/disattiva tracking
-  let nearest=null, nearestDist=30; // soglia 30px
-  Object.values(friends).forEach(f=>{
+  let nearestUid=null, nearestDist=35; // 35px hit area
+  Object.entries(friends).forEach(([uid,f])=>{
     if(f._fx===undefined)return;
     const d=Math.sqrt((tx-f._fx)**2+(ty-f._fy)**2);
-    if(d<nearestDist){nearestDist=d;nearest=f;}
+    if(d<nearestDist){nearestDist=d;nearestUid=uid;}
   });
-  if(nearest){
-    if(trackedFriendId===nearest.id){
-      trackedFriendId=null;showToast('🎯 Tracking disattivato');
+  if(nearestUid){
+    if(trackedFriendId===nearestUid){
+      trackedFriendId=null;
+      showToast('🎯 Tracking disattivato');
     } else {
-      trackedFriendId=nearest.id;
-      showToast('🎯 Seguendo '+nearest.name);
+      trackedFriendId=nearestUid;
+      showToast('🎯 Seguendo '+(friends[nearestUid].name||'?'));
     }
   } else {
-    // Tap su area vuota → cancella tracking
     if(trackedFriendId){trackedFriendId=null;showToast('🎯 Tracking disattivato');}
   }
 }
@@ -541,8 +541,9 @@ function draw(){
   ctx.restore();
 
   // ── Freccia tracking amico selezionato ──
-  if(trackedFriendId&&friends[trackedFriendId]&&myLat!=null){
-    const tf=friends[trackedFriendId];
+  const _tf=trackedFriendId?friends[trackedFriendId]:null;
+  if(_tf&&myLat!=null){
+    const tf=_tf;
     const sp=displayFriendPos[trackedFriendId]||{lat:tf.lat,lon:tf.lon};
     if(sp&&sp.lat!=null){
       const{dist:td,bearing:tb}=distBear(myLat,myLon,sp.lat,sp.lon);
