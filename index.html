@@ -390,24 +390,31 @@ function draw(){
     const r=R*Math.min(dist/MAX_R,0.96);
     const ar=d2r(bearing)-Math.PI/2;
     const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
-    const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>25000?'#778899':col;
+    const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>90000?col+'88':col; // stale=90s, mantieni colore ma semitrasparente
     ctx.save();ctx.setLineDash([3,6]);
     ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);ctx.strokeStyle=fc+'55';ctx.lineWidth=1;ctx.stroke();ctx.restore();
     const isSOS=sosActiveId&&f.id===sosActiveId;
     const blink=isSOS&&(Date.now()%600<300);
     const dotColor=isSOS?'#ff3344':fc;
-    const dotR=isSOS?8:6;
+    const dotR=isSOS?9:8; // dot più grande
     if(!blink){
+      // Cerchio pieno col colore dell'amico
       ctx.beginPath();ctx.arc(fx,fy,dotR,0,Math.PI*2);
-      ctx.fillStyle=dotColor;ctx.shadowColor=dotColor;ctx.shadowBlur=isSOS?24:14;ctx.fill();ctx.shadowBlur=0;
+      ctx.fillStyle=dotColor;ctx.shadowColor=dotColor;ctx.shadowBlur=isSOS?24:16;ctx.fill();ctx.shadowBlur=0;
+      // Iniziale del nome al centro del dot
+      const initial=(f.name||'?')[0].toUpperCase();
+      ctx.font=`bold ${isSOS?10:9}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillStyle='rgba(0,0,0,0.85)';ctx.fillText(initial,fx,fy);
+      ctx.textBaseline='alphabetic';ctx.textAlign='left';
     }
     if(isSOS){
-      // Anello SOS pulsante
       const pulse=((Date.now()%1000)/1000);
-      ctx.beginPath();ctx.arc(fx,fy,12+pulse*10,0,Math.PI*2);
+      ctx.beginPath();ctx.arc(fx,fy,13+pulse*10,0,Math.PI*2);
       ctx.strokeStyle=`rgba(255,51,68,${0.7-pulse*0.7})`;ctx.lineWidth=2;ctx.stroke();
     }
-    ctx.beginPath();ctx.arc(fx,fy,isSOS?14:11,0,Math.PI*2);ctx.strokeStyle=(isSOS?'#ff334488':fc+'44');ctx.lineWidth=1.5;ctx.stroke();
+    // Anello esterno col colore dell'amico
+    ctx.beginPath();ctx.arc(fx,fy,isSOS?15:12,0,Math.PI*2);
+    ctx.strokeStyle=isSOS?'#ff334488':fc+'66';ctx.lineWidth=2;ctx.stroke();
   });
   ctx.restore();
   // Label amici (fuori clip)
@@ -416,7 +423,7 @@ function draw(){
     const r=R*Math.min(dist/MAX_R,0.96);
     const ar=d2r(bearing)-Math.PI/2;
     const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
-    const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>25000?'#778899':col;
+    const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>90000?col+'88':col; // stale=90s, mantieni colore ma semitrasparente
     const nm=f.name||'?',ds=Math.round(dist)+'m';
     ctx.font='bold 11px sans-serif';
     const tw=Math.max(ctx.measureText(nm).width,ctx.measureText(ds).width)+10;
@@ -676,7 +683,7 @@ function renderLista(){
     const col=f.color||'#00c0ff',pr=predictPos(f);
     const sp2=smoothFriendPos[f.id]||{lat:f.lat,lon:f.lon};const db2=(sp2.lat&&myLat)?distBear(myLat,myLon,sp2.lat,sp2.lon):null;
     const ds=db2?Math.round(db2.dist)+'m':'—',dr=db2?cardinal(db2.bearing):'—';
-    return `<div class="fr"><div class="av" style="border-color:${col};color:${col};background:${hex2rgba(col,.15)}">${(f.name||'?')[0].toUpperCase()}</div><div class="fi"><div class="fn">${f.name||'Amico'}</div><div class="fs">${dr} · GPS</div></div><div class="fd" style="color:${col}">${ds}</div></div>`;
+    return `<div class="fr"><div class="av" style="border-color:${col};color:${col};background:${hex2rgba(col,.15)}">${(f.name||'?')[0].toUpperCase()}</div><div class="fi"><div class="fn">${f.name||'Amico'}</div><div class="fs">${dr} · <span style="color:${(Date.now()-(f.ts||0))>90000?'var(--orange)':'var(--green)'}">GPS</span></div></div><div class="fd" style="color:${col}">${ds}</div></div>`;
   }).join('');
 }
 
