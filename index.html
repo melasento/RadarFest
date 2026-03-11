@@ -367,8 +367,13 @@ window.addEventListener('orientationchange',()=>{setTimeout(fixCanvas,300)});
 // Tap sul canvas: se vicino al centro (dot IO) → aggiorna GPS subito
 function handleRadarTap(tx,ty){
   const cx=cv.clientWidth/2, cy=cv.clientHeight/2;
-  // Tap sul dot IO → aggiorna GPS
   if(Math.sqrt((tx-cx)**2+(ty-cy)**2)<28){forceGpsUpdate();return;}
+  // Unrotate tap: porta coordinate schermo → spazio ruotato del canvas
+  if(compassActive){
+    const θ=d2r(compassHeading), c=Math.cos(θ), s=Math.sin(θ);
+    const dx=tx-cx, dy=ty-cy;
+    tx=cx+dx*c-dy*s; ty=cy+dx*s+dy*c;
+  }
   // Tap su un dot amico → attiva/disattiva tracking
   let nearestUid=null, nearestDist=35; // 35px hit area
   Object.entries(friends).forEach(([uid,f])=>{
@@ -410,13 +415,22 @@ function draw(){
   const cx=W/2, cy=H/2, R=Math.min(W,H)/2-14;
   ctx.clearRect(0,0,W,H);
 
+  // Angolo di rotazione bussola (0 se inattiva)
+  const θ=compassActive?d2r(compassHeading):0;
+  const cosT=Math.cos(θ), sinT=Math.sin(θ);
+
+  // ══ RADAR ROTANTE — tutto dentro ruota con la bussola ══
+  ctx.save();
+  ctx.translate(cx,cy); ctx.rotate(-θ); ctx.translate(-cx,-cy);
+  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.clip();
+
   // Sfondo
   const bg=ctx.createRadialGradient(cx,cy,0,cx,cy,R);
   bg.addColorStop(0,'#071d2a');bg.addColorStop(0.7,'#040e16');bg.addColorStop(1,'#020409');
   ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fillStyle=bg;ctx.fill();
 
-  // Sweep rotante
-  ctx.save();ctx.translate(cx,cy);ctx.rotate(sweepAngle);
+  // Sweep rotante (animazione indipendente)
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(sweepAngle+θ);
   for(let i=0;i<8;i++){
     ctx.beginPath();ctx.moveTo(0,0);
     ctx.arc(0,0,R,-Math.PI/2-0.9+i*0.11,-Math.PI/2-0.9+(i+1)*0.11);
@@ -430,7 +444,7 @@ function draw(){
   ctx.strokeStyle='#00e87a';ctx.lineWidth=2;ctx.stroke();
   ctx.restore();
 
-  // Cerchi + distanze
+  // Cerchi + distanze (ruotano col radar)
   ctx.save();ctx.translate(cx,cy);
   [1/3,2/3,1].forEach(f=>{
     ctx.beginPath();ctx.arc(0,0,R*f,0,Math.PI*2);
@@ -449,7 +463,7 @@ function draw(){
   ctx.setLineDash([]);
   ctx.restore();
 
-  // DOT AMICI
+  // DOT AMICI — bearing Nord-up, la rotazione canvas si occupa dell'orientamento
   const now=Date.now();
   const flist=Object.values(friends).filter(f=>f.lat!=null&&myLat!=null);
   flist.forEach(f=>{
@@ -457,7 +471,7 @@ function draw(){
     const vp=sp.lat!=null?sp:{lat:f.lat,lon:f.lon};
     const{dist,bearing}=distBear(myLat,myLon,vp.lat,vp.lon);
     const r=R*Math.min(dist/MAX_R,0.96);
-    const ar=d2r(bearing)-Math.PI/2;
+    const ar=d2r(bearing)-Math.PI/2; // Nord sempre in alto nel sistema ruotato
     f._fx=cx+r*Math.cos(ar); f._fy=cy+r*Math.sin(ar);
     const col=f.color||'#00c0ff';
     f._fc=(now-(f.ts||0))>90000?col+'88':col;
@@ -494,25 +508,34 @@ function draw(){
   });
   ctx.restore();
 
-  // Label amici
+  ctx.restore(); // ══ FINE ROTAZIONE RADAR ══
+
+  // ══ ELEMENTI FISSI — non ruotano ══
+
+  // Label amici: converto da spazio ruotato → schermo
+  // sx = cx + (fx-cx)*cos(θ) + (fy-cy)*sin(θ)
+  // sy = cy - (fx-cx)*sin(θ) + (fy-cy)*cos(θ)
   flist.forEach(f=>{
-    const{_fx:fx,_fy:fy,_fc:fc}=f;if(fx===undefined)return;
+    if(f._fx===undefined||myLat==null)return;
+    const dx=f._fx-cx, dy=f._fy-cy;
+    const sx=cx+dx*cosT+dy*sinT;
+    const sy=cy-dx*sinT+dy*cosT;
     const{dist}=distBear(myLat,myLon,f.lat,f.lon);
     const nm=f.name||'?';
     const ds=dist<1000?Math.round(dist)+'m':(dist/1000).toFixed(1)+'km';
     ctx.font='bold 11px sans-serif';
     const tw=Math.max(ctx.measureText(nm).width,ctx.measureText(ds).width)+8;
     const th=28;
-    let lx=fx<cx?fx-tw-10:fx+14, ly=fy-14;
+    let lx=sx<cx?sx-tw-10:sx+14, ly=sy-14;
     lx=Math.max(4,Math.min(W-tw-4,lx));ly=Math.max(20,Math.min(H-th-4,ly));
     ctx.fillStyle='rgba(2,4,14,0.85)';ctx.fillRect(lx-2,ly,tw+4,th);
-    ctx.fillStyle=fc;ctx.fillRect(lx-2,ly,3,th);
+    ctx.fillStyle=f._fc;ctx.fillRect(lx-2,ly,3,th);
     ctx.fillStyle='#ffffffee';ctx.font='bold 11px sans-serif';ctx.textAlign='left';
     ctx.fillText(nm,lx+4,ly+13);
-    ctx.fillStyle=fc;ctx.font='10px sans-serif';ctx.fillText(ds,lx+4,ly+25);
+    ctx.fillStyle=f._fc;ctx.font='10px sans-serif';ctx.fillText(ds,lx+4,ly+25);
   });
 
-  // IO dot
+  // IO dot (sempre al centro)
   ctx.beginPath();ctx.arc(cx,cy,7,0,Math.PI*2);
   ctx.fillStyle=myColor;ctx.shadowColor=myColor;ctx.shadowBlur=18;ctx.fill();ctx.shadowBlur=0;
   ctx.beginPath();ctx.arc(cx,cy,13,0,Math.PI*2);
@@ -522,14 +545,14 @@ function draw(){
   ctx.fillStyle='#ffffff33';ctx.font='9px sans-serif';ctx.fillText('tocca',cx,cy+22);
   ctx.textAlign='left';
 
-  // ── Freccia tracking amico selezionato ──
+  // ── Freccia tracking amico (bearing compensato per schermo fisso) ──
   const _tf=trackedFriendId?friends[trackedFriendId]:null;
   if(_tf&&myLat!=null){
     const tf=_tf;
     const sp=displayFriendPos[trackedFriendId]||(tf.lat!=null?{lat:tf.lat,lon:tf.lon}:null);
     if(sp&&sp.lat!=null){
       const{dist:td,bearing:tb}=distBear(myLat,myLon,sp.lat,sp.lon);
-      const ar=d2r(tb)-Math.PI/2;
+      const ar=d2r(tb)-θ-Math.PI/2;
       const tCol=tf.color||'#00c0ff';
       const nm=tf.name||'?';
       const ds=td<1000?Math.round(td)+'m':(td/1000).toFixed(1)+'km';
@@ -552,7 +575,7 @@ function draw(){
     }
   }
 
-  // Bordo radar
+  // Bordo radar (fisso)
   ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);
   ctx.strokeStyle='#1a3a4a';ctx.lineWidth=2;ctx.stroke();
 }
