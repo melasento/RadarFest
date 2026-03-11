@@ -337,8 +337,7 @@ function enterGroup(){
   document.getElementById('gnm').textContent='Gruppo '+groupId;
   setTimeout(fixCanvas,50);
   connectMQTT();startGps();
-  window.addEventListener('deviceorientationabsolute',onOrient,true);
-  window.addEventListener('deviceorientation',onOrient,true);
+  requestCompassPermission();
 
 }
 
@@ -511,7 +510,36 @@ function startGps(){
   },()=>{document.getElementById('gdot').className='gdot';document.getElementById('glbl').textContent='GPS off';},
   {enableHighAccuracy:true,maximumAge:5000,timeout:20000});
 }
-function onOrient(e){const h=e.webkitCompassHeading!==undefined?e.webkitCompassHeading:(e.absolute&&e.alpha!=null?e.alpha:null);if(h!=null)rawHeading=h;}
+function onOrient(e){
+  let h=null;
+  if(e.webkitCompassHeading!=null){
+    // iOS: heading diretto, 0=Nord, crescente in senso orario ✓
+    h=e.webkitCompassHeading;
+  } else if(e.absolute && e.alpha!=null){
+    // Android deviceorientationabsolute: alpha cresce in senso ANTIORARIO
+    // quindi l'heading reale = (360 - alpha) % 360
+    h=(360-e.alpha)%360;
+  }
+  if(h!=null) rawHeading=h;
+}
+
+async function requestCompassPermission(){
+  // iOS 13+ richiede permesso esplicito per i sensori di movimento
+  if(typeof DeviceOrientationEvent!=='undefined' &&
+     typeof DeviceOrientationEvent.requestPermission==='function'){
+    try{
+      const state=await DeviceOrientationEvent.requestPermission();
+      if(state==='granted'){
+        window.addEventListener('deviceorientationabsolute',onOrient,true);
+        window.addEventListener('deviceorientation',onOrient,true);
+      }
+    }catch(e){}
+  } else {
+    // Android / altri: permesso non richiesto
+    window.addEventListener('deviceorientationabsolute',onOrient,true);
+    window.addEventListener('deviceorientation',onOrient,true);
+  }
+}
 
 setInterval(()=>{
   if(!gpsTs||!myLat)return;
@@ -544,10 +572,14 @@ function connectMQTT(){
         const nm=data.name||friends[uid2]?.name||'Un amico';
         startSOSAlert(nm,uid2);
       }else if(type==='sosack'){
-        // Qualcuno ha fermato il mio SOS
+        // Ferma l'alert SOS su TUTTI i dispositivi del gruppo
+        if(sosActiveId){
+          stopSOSAlert();
+          showToast('✅ '+data.name+' ha risposto al SOS');
+        }
+        // Solo chi ha inviato il SOS riceve la notifica speciale
         if(data.target===myId){
           addNotification('✅ '+data.name+' ha confermato il tuo SOS',new Date());
-          showToast('✅ '+data.name+' ha fermato il tuo SOS');
         }
       }
       updateUI();
