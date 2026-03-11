@@ -231,6 +231,7 @@ let sosTimer=null,sosAudioCtx=null,sosVibInterval=null,sosAudioInterval=null,sos
 let mySosActive=false; // true se sono IO il mittente SOS
 let sosFromId=null,sosFromPos=null,sosCdInterval=null,sosActiveId=null;
 let rawHeading=0,compassHeading=0,compassActive=false;
+let gpsHeading=null; // heading da GPS (fallback se bussola assente)
 const headingBuf=[];  // buffer mediana bussola
 const HEADING_BUF_SIZE=12; // ultimi 12 campioni (~200ms a 60fps)
 let smoothFriendPos={}; // target GPS filtrato
@@ -451,6 +452,20 @@ function draw(){
     ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(dx*R*0.707,dy*R*0.707);ctx.stroke();
   });
   ctx.setLineDash([]);
+
+  // Indicatore N rotante sul bordo
+  const effH2=compassActive?displayHeading:(gpsHeading||0);
+  const nAngle=d2r(-effH2)-Math.PI/2; // dove cade il Nord sul canvas
+  const nx=Math.cos(nAngle)*(R-6), ny=Math.sin(nAngle)*(R-6);
+  ctx.fillStyle='#ff6644';ctx.font='bold 13px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.shadowColor='#ff6644';ctx.shadowBlur=8;
+  ctx.fillText('N',nx,ny);
+  ctx.shadowBlur=0;
+
+  // Freccia heading al centro (indica la direzione in cui si sta muovendo)
+  ctx.beginPath();ctx.moveTo(0,-18);ctx.lineTo(-6,6);ctx.lineTo(0,2);ctx.lineTo(6,6);ctx.closePath();
+  ctx.fillStyle='#00e87a';ctx.shadowColor='#00e87a';ctx.shadowBlur=12;ctx.fill();ctx.shadowBlur=0;
+
   ctx.restore();
 
 
@@ -463,7 +478,8 @@ function draw(){
     const vp=sp.lat!=null?sp:{lat:f.lat,lon:f.lon};
     const{dist,bearing}=distBear(myLat,myLon,vp.lat,vp.lon);
     const r=R*Math.min(dist/MAX_R,0.96);
-    const ar=d2r(bearing)-Math.PI/2;
+    const effH=compassActive?displayHeading:(gpsHeading||0);
+    const ar=d2r(bearing-effH)-Math.PI/2;
     f._fx=cx+r*Math.cos(ar); f._fy=cy+r*Math.sin(ar);
     const col=f.color||'#00c0ff';
     f._fc=(now-(f.ts||0))>90000?col+'88':col;
@@ -537,7 +553,8 @@ function draw(){
     const sp=displayFriendPos[trackedFriendId]||(tf.lat!=null?{lat:tf.lat,lon:tf.lon}:null);
     if(sp&&sp.lat!=null){
       const{dist:td,bearing:tb}=distBear(myLat,myLon,sp.lat,sp.lon);
-      const ar=d2r(tb)-Math.PI/2;
+      const effHt=compassActive?displayHeading:(gpsHeading||0);
+      const ar=d2r(tb-effHt)-Math.PI/2;
       const tCol=tf.color||'#00c0ff';
       const nm=tf.name||'?';
       const ds=td<1000?Math.round(td)+'m':(td/1000).toFixed(1)+'km';
@@ -660,6 +677,7 @@ function fetchGps(first){
   navigator.geolocation.getCurrentPosition(pos=>{
     const lat=pos.coords.latitude,lon=pos.coords.longitude;
     const acc=Math.round(pos.coords.accuracy);
+    if(pos.coords.heading!=null&&!isNaN(pos.coords.heading)&&pos.coords.speed>0.5) gpsHeading=pos.coords.heading;
     gpsTs=Date.now();
     if(acc>150){
       // Fix molto impreciso: tenta anche modalità bassa precisione (WiFi/celle)
