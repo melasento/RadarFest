@@ -369,12 +369,6 @@ function handleRadarTap(tx,ty){
   const cx=cv.clientWidth/2, cy=cv.clientHeight/2;
   // Tap sul dot IO → aggiorna GPS
   if(Math.sqrt((tx-cx)**2+(ty-cy)**2)<28){forceGpsUpdate();return;}
-  // Un-ruota le coordinate tap per matchare f._fx/_fy (che sono in spazio ruotato)
-  const effHr=d2r(compassActive?compassHeading:(gpsHeading||0));
-  const dx=tx-cx, dy=ty-cy;
-  const rtx=cx+dx*Math.cos(effHr)-dy*Math.sin(effHr);
-  const rty=cy+dx*Math.sin(effHr)+dy*Math.cos(effHr);
-  tx=rtx; ty=rty;
   // Tap su un dot amico → attiva/disattiva tracking
   let nearestUid=null, nearestDist=35; // 35px hit area
   Object.entries(friends).forEach(([uid,f])=>{
@@ -416,24 +410,13 @@ function draw(){
   const cx=W/2, cy=H/2, R=Math.min(W,H)/2-14;
   ctx.clearRect(0,0,W,H);
 
-  // Heading effettivo per ruotare il radar
-  const effH=compassActive?compassHeading:(gpsHeading||0);
-  const effHrad=d2r(effH);
-
-  // ── RADAR ROTANTE (griglia + dots ruotano insieme) ──
-  ctx.save();
-  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.clip();
-  ctx.translate(cx,cy);
-  ctx.rotate(-effHrad); // ruota così l'heading dell'utente è sempre in cima
-  ctx.translate(-cx,-cy);
-
   // Sfondo
   const bg=ctx.createRadialGradient(cx,cy,0,cx,cy,R);
   bg.addColorStop(0,'#071d2a');bg.addColorStop(0.7,'#040e16');bg.addColorStop(1,'#020409');
   ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fillStyle=bg;ctx.fill();
 
-  // Sweep rotante (mantiene angolo assoluto)
-  ctx.save();ctx.translate(cx,cy);ctx.rotate(sweepAngle+effHrad);
+  // Sweep rotante
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(sweepAngle);
   for(let i=0;i<8;i++){
     ctx.beginPath();ctx.moveTo(0,0);
     ctx.arc(0,0,R,-Math.PI/2-0.9+i*0.11,-Math.PI/2-0.9+(i+1)*0.11);
@@ -447,13 +430,13 @@ function draw(){
   ctx.strokeStyle='#00e87a';ctx.lineWidth=2;ctx.stroke();
   ctx.restore();
 
-  // Cerchi + distanze (numeri ruotano col radar)
+  // Cerchi + distanze
   ctx.save();ctx.translate(cx,cy);
-  [1/3,2/3,1].forEach(frac=>{
-    ctx.beginPath();ctx.arc(0,0,R*frac,0,Math.PI*2);
+  [1/3,2/3,1].forEach(f=>{
+    ctx.beginPath();ctx.arc(0,0,R*f,0,Math.PI*2);
     ctx.strokeStyle='#1a3a4a';ctx.lineWidth=1;ctx.stroke();
     ctx.fillStyle='#3a7a8a';ctx.font='10px sans-serif';ctx.textAlign='center';
-    ctx.fillText(Math.round(MAX_R*frac)+'m',0,-R*frac+13);
+    ctx.fillText(Math.round(MAX_R*f)+'m',0,-R*f+13);
   });
   ctx.strokeStyle='#1a3a4a99';ctx.lineWidth=0.8;
   [[0,-1],[0,1],[1,0],[-1,0]].forEach(([dx,dy])=>{
@@ -466,7 +449,7 @@ function draw(){
   ctx.setLineDash([]);
   ctx.restore();
 
-  // DOT AMICI (posizione Nord-up: il canvas rotation gestisce tutto)
+  // DOT AMICI
   const now=Date.now();
   const flist=Object.values(friends).filter(f=>f.lat!=null&&myLat!=null);
   flist.forEach(f=>{
@@ -474,13 +457,14 @@ function draw(){
     const vp=sp.lat!=null?sp:{lat:f.lat,lon:f.lon};
     const{dist,bearing}=distBear(myLat,myLon,vp.lat,vp.lon);
     const r=R*Math.min(dist/MAX_R,0.96);
-    const ar=d2r(bearing)-Math.PI/2; // Nord-up: la rotazione canvas gestisce l'orientamento
-    f._fx=cx+r*Math.cos(ar); f._fy=cy+r*Math.sin(ar); // coordinate nel sistema RUOTATO
+    const ar=d2r(bearing)-Math.PI/2;
+    f._fx=cx+r*Math.cos(ar); f._fy=cy+r*Math.sin(ar);
     const col=f.color||'#00c0ff';
     f._fc=(now-(f.ts||0))>90000?col+'88':col;
     f._isSOS=!!(sosActiveId&&f.id===sosActiveId);
   });
 
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,R-1,0,Math.PI*2);ctx.clip();
   flist.forEach(f=>{
     const{_fx:fx,_fy:fy,_fc:fc,_isSOS:isSOS}=f;
     ctx.save();ctx.setLineDash([3,6]);
@@ -508,34 +492,27 @@ function draw(){
       ctx.strokeStyle=fc+'22';ctx.lineWidth=1;ctx.setLineDash([2,4]);ctx.stroke();ctx.setLineDash([]);
     }
   });
+  ctx.restore();
 
-  ctx.restore(); // fine rotazione radar
-
-  // ── ELEMENTI FISSI (non ruotano) ──
-
-  // Label amici: calcolo posizione screen da coordinate ruotate
+  // Label amici
   flist.forEach(f=>{
-    if(f._fx===undefined)return;
-    // Trasforma da spazio ruotato → schermo
-    const dx=f._fx-cx, dy=f._fy-cy;
-    const sx=cx+dx*Math.cos(-effHrad)-dy*Math.sin(-effHrad);
-    const sy=cy+dx*Math.sin(-effHrad)+dy*Math.cos(-effHrad);
+    const{_fx:fx,_fy:fy,_fc:fc}=f;if(fx===undefined)return;
     const{dist}=distBear(myLat,myLon,f.lat,f.lon);
     const nm=f.name||'?';
     const ds=dist<1000?Math.round(dist)+'m':(dist/1000).toFixed(1)+'km';
     ctx.font='bold 11px sans-serif';
     const tw=Math.max(ctx.measureText(nm).width,ctx.measureText(ds).width)+8;
     const th=28;
-    let lx=sx<cx?sx-tw-10:sx+14, ly=sy-14;
+    let lx=fx<cx?fx-tw-10:fx+14, ly=fy-14;
     lx=Math.max(4,Math.min(W-tw-4,lx));ly=Math.max(20,Math.min(H-th-4,ly));
     ctx.fillStyle='rgba(2,4,14,0.85)';ctx.fillRect(lx-2,ly,tw+4,th);
-    ctx.fillStyle=f._fc;ctx.fillRect(lx-2,ly,3,th);
+    ctx.fillStyle=fc;ctx.fillRect(lx-2,ly,3,th);
     ctx.fillStyle='#ffffffee';ctx.font='bold 11px sans-serif';ctx.textAlign='left';
     ctx.fillText(nm,lx+4,ly+13);
-    ctx.fillStyle=f._fc;ctx.font='10px sans-serif';ctx.fillText(ds,lx+4,ly+25);
+    ctx.fillStyle=fc;ctx.font='10px sans-serif';ctx.fillText(ds,lx+4,ly+25);
   });
 
-  // IO dot (sempre al centro)
+  // IO dot
   ctx.beginPath();ctx.arc(cx,cy,7,0,Math.PI*2);
   ctx.fillStyle=myColor;ctx.shadowColor=myColor;ctx.shadowBlur=18;ctx.fill();ctx.shadowBlur=0;
   ctx.beginPath();ctx.arc(cx,cy,13,0,Math.PI*2);
@@ -552,7 +529,7 @@ function draw(){
     const sp=displayFriendPos[trackedFriendId]||(tf.lat!=null?{lat:tf.lat,lon:tf.lon}:null);
     if(sp&&sp.lat!=null){
       const{dist:td,bearing:tb}=distBear(myLat,myLon,sp.lat,sp.lon);
-      const ar=d2r(tb-effH)-Math.PI/2; // heading-compensato per schermo fisso
+      const ar=d2r(tb)-Math.PI/2;
       const tCol=tf.color||'#00c0ff';
       const nm=tf.name||'?';
       const ds=td<1000?Math.round(td)+'m':(td/1000).toFixed(1)+'km';
@@ -578,13 +555,6 @@ function draw(){
   // Bordo radar
   ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);
   ctx.strokeStyle='#1a3a4a';ctx.lineWidth=2;ctx.stroke();
-
-  // Debug heading (piccolo, angolo in alto a destra del radar)
-  if(compassActive){
-    ctx.fillStyle='#3a7a8a99';ctx.font='10px monospace';ctx.textAlign='right';
-    ctx.fillText(Math.round(compassHeading)+'°',cx+R-4,cy-R+14);
-    ctx.textAlign='left';
-  }
 }
 
 // ══════════════════════════════════
