@@ -483,75 +483,68 @@ resizeCanvas();
 function drawRadar(){
   const W=canvas.width,H=canvas.height;
   if(!W||!H)return;
-  // Centro in basso al centro — come nello screenshot
-  const cx=W/2,cy=H;
-  const R=H*0.97;   // raggio quasi pari all'altezza
+  // Centro al CENTRO del canvas — cerchio completo visibile
+  const cx=W/2, cy=H/2;
+  const R=Math.min(W,H)/2 - 16;
   const MR=500;
   ctx.clearRect(0,0,W,H);
 
-  // ── Sfondo sfumato ──
+  // ── Clip tutto dentro il cerchio ──
+  ctx.save();
+  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.clip();
+
+  // ── Sfondo ──
   const bg=ctx.createRadialGradient(cx,cy,0,cx,cy,R);
-  bg.addColorStop(0,'#071d2a');
-  bg.addColorStop(0.5,'#040e16');
-  bg.addColorStop(1,'#02040A');
-  ctx.beginPath();ctx.arc(cx,cy,R,Math.PI,2*Math.PI);ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();
-  ctx.fillStyle=bg;ctx.fill();
+  bg.addColorStop(0,'#071d2a');bg.addColorStop(0.6,'#040e16');bg.addColorStop(1,'#02040A');
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+
+  // ── Sweep PRIMA dei cerchi (sotto) ──
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(sweepAngle);
+  // Scia lunga
+  ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,-Math.PI/2-1.2,-Math.PI/2);ctx.closePath();
+  const tg=ctx.createLinearGradient(0,-R,0,0);
+  tg.addColorStop(0,'rgba(0,200,100,0.10)');tg.addColorStop(1,'rgba(0,200,100,0)');
+  ctx.fillStyle=tg;ctx.fill();
+  // Cono luminoso
+  ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,-Math.PI/2-0.25,-Math.PI/2+0.25);ctx.closePath();
+  const cg=ctx.createLinearGradient(0,-R,0,0);
+  cg.addColorStop(0,'rgba(0,232,122,0.28)');cg.addColorStop(1,'rgba(0,232,122,0)');
+  ctx.fillStyle=cg;ctx.fill();
+  // Linea sweep
+  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-R);
+  ctx.strokeStyle='#00e87a';ctx.lineWidth=2;ctx.stroke();
+  ctx.restore();
 
   // ── Cerchi concentrici ──
   [1/3,2/3,1].forEach(f=>{
-    ctx.beginPath();ctx.arc(cx,cy,R*f,Math.PI,2*Math.PI);
-    ctx.strokeStyle='#1a3a4a';ctx.lineWidth=1.2;ctx.stroke();
-    // Etichette distanza sull'asse N (in cima al cerchio)
-    const lx=cx,ly=cy-R*f+14;
-    ctx.fillStyle='#4a8a9a';ctx.font='11px sans-serif';ctx.textAlign='center';
-    ctx.fillText(Math.round(MR*f)+'m',lx,ly);
+    ctx.beginPath();ctx.arc(cx,cy,R*f,0,Math.PI*2);
+    ctx.strokeStyle='#1a3a4a';ctx.lineWidth=1;ctx.stroke();
+    ctx.fillStyle='#4a8a9a';ctx.font='10px sans-serif';ctx.textAlign='center';
+    ctx.fillText(Math.round(MR*f)+'m',cx,cy-R*f+13);
   });
-  ctx.textAlign='left';
 
-  // ── Linee cardinali (W→E orizzontale + N verticale) ──
-  ctx.strokeStyle='#1a3a4a88';ctx.lineWidth=0.8;
-  ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(W,cy);ctx.stroke(); // orizzontale W-E
-  ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,cy);ctx.stroke(); // verticale N
+  // ── Linee cardinali ──
+  ctx.strokeStyle='#1a3a4a99';ctx.lineWidth=0.8;
+  [[0,-1],[0,1],[1,0],[-1,0]].forEach(([dx,dy])=>{
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx*R,cy+dy*R);ctx.stroke();
+  });
+  ctx.setLineDash([2,5]);
+  [[1,-1],[1,1],[-1,1],[-1,-1]].forEach(([dx,dy])=>{
+    const s=0.707;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx*R*s,cy+dy*R*s);ctx.stroke();
+  });
+  ctx.setLineDash([]);
 
-  // ── Sweep animato ──
-  ctx.save();ctx.translate(cx,cy);ctx.rotate(sweepAngle);
-  // Cono verde
-  ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,-Math.PI/2-0.22,-Math.PI/2+0.22);ctx.closePath();
-  const cg=ctx.createLinearGradient(0,-R,0,0);
-  cg.addColorStop(0,'rgba(0,232,122,0.22)');cg.addColorStop(1,'rgba(0,232,122,0)');
-  ctx.fillStyle=cg;ctx.fill();
-  // Glow trail (scia del sweep)
-  ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,-Math.PI/2-0.8,-Math.PI/2+0.02);ctx.closePath();
-  const tg=ctx.createLinearGradient(0,-R,0,0);
-  tg.addColorStop(0,'rgba(0,200,100,0.06)');tg.addColorStop(1,'rgba(0,200,100,0)');
-  ctx.fillStyle=tg;ctx.fill();
-  // Linea sweep
-  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-R);
-  ctx.strokeStyle='#00e87a';ctx.lineWidth=1.8;ctx.stroke();
-  ctx.restore();
-
-  // ── Punto IO ──
-  ctx.beginPath();ctx.arc(cx,cy,7,0,Math.PI*2);
-  ctx.fillStyle=myColor;ctx.shadowColor=myColor;ctx.shadowBlur=18;ctx.fill();ctx.shadowBlur=0;
-  ctx.beginPath();ctx.arc(cx,cy,13,0,Math.PI*2);
-  ctx.strokeStyle=myColor+'55';ctx.lineWidth=1.5;ctx.stroke();
-  ctx.fillStyle='#ffffffcc';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
-  ctx.fillText(myName||'Io',cx,cy-18);ctx.textAlign='left';
-
-  // ── Amici ──
+  // ── Linee amici + dot (dentro clip) ──
   const now=Date.now();
   Object.values(friends).forEach(f=>{
     if(f.lat===null||myLat===null)return;
     const pr=predictPos(f);
     const {dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
-    const r=R*Math.min(dist/MR,0.98);
-    // angolo: 0°=N (su), compensato dall'heading bussola
+    const r=R*Math.min(dist/MR,0.96);
     const ar=d2r(bearing-heading)-Math.PI/2;
     const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
-    // disegna solo se nella metà superiore del canvas
-    if(fy>cy+20)return;
     const col=f.brb?'#ffa040':(f.color||'#00c0ff');
-    const stale=(now-(f.ts||0))>25000,fc=stale?'#888899':col;
+    const fc=(now-(f.ts||0))>25000?'#888899':col;
     // Linea tratteggiata
     ctx.save();ctx.setLineDash([3,6]);
     ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);
@@ -559,23 +552,73 @@ function drawRadar(){
     // Dot
     ctx.beginPath();ctx.arc(fx,fy,6,0,Math.PI*2);
     ctx.fillStyle=fc;ctx.shadowColor=fc;ctx.shadowBlur=14;ctx.fill();ctx.shadowBlur=0;
-    ctx.beginPath();ctx.arc(fx,fy,10,0,Math.PI*2);ctx.strokeStyle=fc+'55';ctx.lineWidth=1.5;ctx.stroke();
-    // Label
-    const labelX=fx+13,labelY=fy-3;
-    ctx.fillStyle='#ffffffee';ctx.font='bold 11px sans-serif';ctx.fillText(f.name||'?',labelX,labelY);
-    ctx.fillStyle=fc;ctx.font='10px sans-serif';ctx.fillText(Math.round(dist)+'m',labelX,labelY+12);
-    if(f.brb){ctx.font='9px sans-serif';ctx.fillStyle='#ffa040';ctx.fillText('⏱ BRB',labelX,labelY+22);}
+    ctx.beginPath();ctx.arc(fx,fy,11,0,Math.PI*2);ctx.strokeStyle=fc+'55';ctx.lineWidth=1.5;ctx.stroke();
   });
+
+  ctx.restore(); // fine clip
+
+  // ── Label amici FUORI clip (sempre leggibili, mai tagliate) ──
+  Object.values(friends).forEach(f=>{
+    if(f.lat===null||myLat===null)return;
+    const pr=predictPos(f);
+    const {dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
+    const r=R*Math.min(dist/MR,0.96);
+    const ar=d2r(bearing-heading)-Math.PI/2;
+    const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
+    const col=f.brb?'#ffa040':(f.color||'#00c0ff');
+    const fc=(Date.now()-(f.ts||0))>25000?'#888899':col;
+    // Posiziona label verso il centro per non uscire dal cerchio
+    const towardCx=fx+(cx-fx)*0.3, towardCy=fy+(cy-fy)*0.3;
+    // Offset: a destra se sinistra del centro, a sinistra se destra
+    const offX=fx<cx?-60:14, offY=-6;
+    const lx=fx+offX, ly=fy+offY;
+    // Sfondo semitrasparente per leggibilità
+    const label=f.name||'?';
+    const distLbl=Math.round(dist)+'m';
+    ctx.font='bold 11px sans-serif';
+    const tw=Math.max(ctx.measureText(label).width,ctx.measureText(distLbl).width);
+    ctx.fillStyle='rgba(2,4,10,0.72)';
+    ctx.beginPath();ctx.roundRect(lx-3,ly-12,tw+10,f.brb?36:26,5);ctx.fill();
+    ctx.fillStyle='#ffffffee';ctx.fillText(label,lx,ly);
+    ctx.font='10px sans-serif';ctx.fillStyle=fc;ctx.fillText(distLbl,lx,ly+12);
+    if(f.brb){ctx.font='9px sans-serif';ctx.fillStyle='#ffa040';ctx.fillText('⏱ BRB',lx,ly+23);}
+  });
+
+  // ── Punto IO (sopra tutto) ──
+  ctx.beginPath();ctx.arc(cx,cy,7,0,Math.PI*2);
+  ctx.fillStyle=myColor;ctx.shadowColor=myColor;ctx.shadowBlur=18;ctx.fill();ctx.shadowBlur=0;
+  ctx.beginPath();ctx.arc(cx,cy,13,0,Math.PI*2);ctx.strokeStyle=myColor+'55';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.fillStyle='#ffffffcc';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+  ctx.fillText(myName||'Io',cx,cy-18);ctx.textAlign='left';
+
+  // ── Bordo cerchio ──
+  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);
+  ctx.strokeStyle='#1a3a4a';ctx.lineWidth=2;ctx.stroke();
+
+  // ── Etichette cardinali fisse ──
+  ctx.fillStyle='#00c0ffcc';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+  ctx.fillText('N',cx,cy-R+22);
+  ctx.fillText('S',cx,cy+R-10);
+  ctx.textAlign='left';
+  ctx.fillText('O',cx-R+8,cy+4);
+  ctx.textAlign='right';
+  ctx.fillText('E',cx+R-8,cy+4);
+  ctx.textAlign='left';
 }
 
-// ── LOOP ──
-let lastT=0;
-(function loop(t){
-  const dt=(t-lastT)/1000;lastT=t;
-  sweepAngle+=dt*1.1;
-  drawRadar();
-  requestAnimationFrame(loop);
-})();
+// ── LOOP robusto ──
+let lastT=0,animId=null;
+function startLoop(){
+  if(animId)return;
+  function loop(t){
+    const dt=Math.min((t-lastT)/1000,0.1);lastT=t;
+    sweepAngle+=dt*1.1;
+    drawRadar();
+    animId=requestAnimationFrame(loop);
+  }
+  animId=requestAnimationFrame(loop);
+}
+startLoop();
 
 // ══════════════════════════════════════════
 // SHARE
