@@ -232,7 +232,8 @@ let sosFromId=null,sosFromPos=null,sosCdInterval=null,sosActiveId=null;
 let rawHeading=0,compassHeading=0,compassActive=false;
 const headingBuf=[];  // buffer mediana bussola
 const HEADING_BUF_SIZE=12; // ultimi 12 campioni (~200ms a 60fps)
-let smoothFriendPos={}; // posizioni smussate per eliminare jitter GPS
+let smoothFriendPos={}; // target GPS filtrato
+let displayFriendPos={}; // posizione visiva animata per-frame
 
 // ══════════════════════════════════
 // UTILS
@@ -444,7 +445,7 @@ function draw(){
   const now=Date.now();
   const flist=Object.values(friends).filter(f=>f.lat!=null&&myLat!=null);
   flist.forEach(f=>{
-    const sp=smoothFriendPos[f.id]||{lat:f.lat,lon:f.lon};
+    const sp=displayFriendPos[f.id]||smoothFriendPos[f.id]||{lat:f.lat,lon:f.lon};
     const vp=sp.lat!=null?sp:{lat:f.lat,lon:f.lon};
     const{dist,bearing}=distBear(myLat,myLon,vp.lat,vp.lon);
     const r=R*Math.min(dist/MAX_R,0.96);
@@ -541,7 +542,7 @@ function draw(){
 // LOOP
 // ══════════════════════════════════
 let prevT=0,lastDraw=0;
-const FRAME_MS=1000/15; // 15fps: abbastanza fluido, molto stabile
+const FRAME_MS=1000/30; // 30fps: fluido visivamente
 
 // Heading visualizzato — si aggiorna solo con isteresi (no micro-tremore)
 let displayHeading=0;      // heading attualmente mostrato sul radar
@@ -575,6 +576,24 @@ function loop(t){
   requestAnimationFrame(loop);
   const dt=Math.min((t-prevT)/1000,0.1);prevT=t;
   sweepAngle+=dt*1.2;
+
+  // Anima displayFriendPos verso smoothFriendPos ogni frame
+  // α = 1-(1-base)^dt → frame-rate independent, ~1.5s per raggiungere il target
+  const α=1-Math.pow(0.02, dt);
+  Object.keys(smoothFriendPos).forEach(id=>{
+    const tgt=smoothFriendPos[id];
+    if(!tgt||tgt.lat==null)return;
+    if(!displayFriendPos[id]){
+      displayFriendPos[id]={lat:tgt.lat,lon:tgt.lon}; // primo valore: posiziona subito
+      return;
+    }
+    const cur=displayFriendPos[id];
+    displayFriendPos[id]={
+      lat: cur.lat + (tgt.lat-cur.lat)*α,
+      lon: cur.lon + (tgt.lon-cur.lon)*α
+    };
+  });
+
   if(compassActive){
     let diff=rawHeading-compassHeading;
     while(diff>180)diff-=360;while(diff<-180)diff+=360;
@@ -939,7 +958,7 @@ function shareWA(){
 }
 function copyLink(){const url=getUrl();if(!url){showToast('⚠️ Serve HTTPS');return;}navigator.clipboard?.writeText(url);showToast('🔗 Link copiato!');}
 function copyCode(){navigator.clipboard?.writeText(groupId);showToast('📋 Codice: '+groupId);}
-function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsInterval)clearInterval(gpsInterval);gpsInterval=null;removeMQTT();friends={};predMap={};smoothFriendPos={};show('s-landing');groupId=null;}
+function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsInterval)clearInterval(gpsInterval);gpsInterval=null;removeMQTT();friends={};predMap={};smoothFriendPos={};displayFriendPos={};show('s-landing');groupId=null;}
 
 // ══════════════════════════════════
 // TOAST
