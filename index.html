@@ -926,7 +926,17 @@ function renderLista(){
 // SHARE
 // ══════════════════════════════════
 function getUrl(){const o=location.origin;if(!o||o==='null'||o.startsWith('file'))return null;return o+location.pathname+'?group='+groupId;}
-function shareWA(){const url=getUrl();const msg=url?'🧭 *Friend Compass*\nUnisciti al gruppo *'+groupId+'*!\n\n'+url:'🧭 *Friend Compass*\nCodice: *'+groupId+'*';if(navigator.share&&url)navigator.share({title:'Friend Compass',url}).catch(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'));else window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');}
+function shareWA(){
+  const url=getUrl();
+  // Messaggio con link su riga separata — WhatsApp lo rende cliccabile con anteprima
+  const msg=url
+    ? '🧭 *Friend Compass* — Seguiamoci al festival!\n'
+    + 'Unisciti al gruppo *'+groupId+'*\n\n'
+    + url
+    : '🧭 *Friend Compass*\nCodice gruppo: *'+groupId+'*\n\nAprilo su: https://'+location.host+location.pathname;
+  // Sempre wa.me diretto — niente navigator.share che perde il testo
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
 function copyLink(){const url=getUrl();if(!url){showToast('⚠️ Serve HTTPS');return;}navigator.clipboard?.writeText(url);showToast('🔗 Link copiato!');}
 function copyCode(){navigator.clipboard?.writeText(groupId);showToast('📋 Codice: '+groupId);}
 function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsInterval)clearInterval(gpsInterval);gpsInterval=null;removeMQTT();friends={};predMap={};smoothFriendPos={};show('s-landing');groupId=null;}
