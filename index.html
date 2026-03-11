@@ -230,6 +230,8 @@ let notifications=[];
 let sosTimer=null,sosAudioCtx=null,sosVibInterval=null,sosAudioInterval=null,sosCountdown=SOS_DURATION;
 let sosFromId=null,sosFromPos=null,sosCdInterval=null,sosActiveId=null;
 let rawHeading=0,compassHeading=0,compassActive=false;
+const headingBuf=[];  // buffer mediana bussola
+const HEADING_BUF_SIZE=12; // ultimi 12 campioni (~200ms a 60fps)
 let smoothFriendPos={}; // posizioni smussate per eliminare jitter GPS
 
 // ══════════════════════════════════
@@ -259,7 +261,7 @@ function updateSmoothedPos(id, newLat, newLon, acc){
   const A = acc||40; // accuratezza dichiarata dal telefono in metri
 
   // Dead zone adattiva: metà dell'accuratezza (sotto questo = puro rumore)
-  const DEAD_ZONE = Math.max(A * 0.6, 15);
+  const DEAD_ZONE = Math.max(A * 1.0, 25); // = tutta l'accuratezza dichiarata, minimo 25m
   // Salto reale: oltre 3× l'accuratezza = l'amico si è davvero spostato
   const JUMP_THR = Math.max(A * 3, 80);
   // Peso adattivo: GPS preciso (acc=10) → peso=0.9, impreciso (acc=80) → peso=0.15
@@ -355,7 +357,8 @@ function fixCanvas(){
   const w=document.getElementById('radar-wrap');
   cv.width=w.offsetWidth;cv.height=w.offsetHeight;
 }
-window.addEventListener('resize',fixCanvas);
+window.addEventListener('resize',()=>{setTimeout(fixCanvas,100)});
+window.addEventListener('orientationchange',()=>{setTimeout(fixCanvas,300)});
 
 // Tap sul canvas: se vicino al centro (dot IO) → aggiorna GPS subito
 cv.addEventListener('click',e=>{
@@ -543,13 +546,19 @@ function draw(){
 // ══════════════════════════════════
 // LOOP
 // ══════════════════════════════════
-let prevT=0;
+let prevT=0,lastDraw=0;
+const FRAME_MS=1000/20; // 20fps: fluido, niente tremore
+
 function loop(t){
+  requestAnimationFrame(loop);
   const dt=Math.min((t-prevT)/1000,0.1);prevT=t;
   sweepAngle+=dt*1.2;
-  if(compassActive) compassHeading=lerpAngle(compassHeading,rawHeading,0.15);
-  draw();
-  requestAnimationFrame(loop);
+  if(compassActive){
+    let diff=rawHeading-compassHeading;
+    while(diff>180)diff-=360;while(diff<-180)diff+=360;
+    if(Math.abs(diff)>1.5) compassHeading=lerpAngle(compassHeading,rawHeading,0.03);
+  }
+  if(t-lastDraw>=FRAME_MS){lastDraw=t;draw();}
 }
 requestAnimationFrame(loop);
 
@@ -567,21 +576,42 @@ function startGps(){
 
 function fetchGps(first){
   const dot=document.getElementById('gdot'),lbl=document.getElementById('glbl');
-  if(first){dot.className='gdot wait';lbl.textContent='GPS...';}
-  else{
-    // Non mostrare "attesa" se abbiamo già una posizione
-    if(myLat!==null){dot.className='gdot wait';}
-  }
+  if(first||myLat===null){dot.className='gdot wait';lbl.textContent='GPS...';}
+
+  // Prova prima con alta precisione
   navigator.geolocation.getCurrentPosition(pos=>{
-    const lat=pos.coords.latitude,lon=pos.coords.longitude,acc=Math.round(pos.coords.accuracy);
+    const lat=pos.coords.latitude,lon=pos.coords.longitude;
+    const acc=Math.round(pos.coords.accuracy);
     gpsTs=Date.now();
-    dot.className='gdot ok';lbl.textContent='GPS ±'+acc+'m';
-    myLat=lat;myLon=lon;myAcc=acc;
-    publishPos();
+    if(acc>150){
+      // Fix molto impreciso: tenta anche modalità bassa precisione (WiFi/celle)
+      // a volte è più stabile del GPS con segnale debole
+      navigator.geolocation.getCurrentPosition(pos2=>{
+        const acc2=Math.round(pos2.coords.accuracy);
+        // Usa il fix più preciso tra i due
+        if(acc2<acc){
+          myLat=pos2.coords.latitude;myLon=pos2.coords.longitude;myAcc=acc2;
+        } else {
+          myLat=lat;myLon=lon;myAcc=acc;
+        }
+        gpsTs=Date.now();
+        dot.className=myAcc>100?'gdot old':'gdot ok';
+        lbl.textContent='GPS ±'+myAcc+'m';
+        publishPos();
+      },()=>{
+        myLat=lat;myLon=lon;myAcc=acc;
+        dot.className='gdot old';lbl.textContent='GPS ±'+acc+'m';
+        publishPos();
+      },{enableHighAccuracy:false,maximumAge:30000,timeout:8000});
+    } else {
+      myLat=lat;myLon=lon;myAcc=acc;
+      dot.className='gdot ok';lbl.textContent='GPS ±'+acc+'m';
+      publishPos();
+    }
   },err=>{
     dot.className='gdot old';
     lbl.textContent=myLat?'GPS ±'+(myAcc||'?')+'m':'GPS off';
-  },{enableHighAccuracy:true,maximumAge:20000,timeout:15000});
+  },{enableHighAccuracy:true,maximumAge:20000,timeout:18000});
 }
 
 // Tap sul dot "Io" → aggiornamento immediato
@@ -606,19 +636,27 @@ function forceGpsUpdate(){
 function compassHandler(e){
   let h=null;
   if(typeof e.webkitCompassHeading==='number'&&!isNaN(e.webkitCompassHeading)){
-    // iOS Safari — già in gradi dal Nord, senso orario
     h=e.webkitCompassHeading;
   } else if(typeof e.alpha==='number'&&!isNaN(e.alpha)){
-    // Android/Chrome — alpha è CCW da Nord, convertiamo in CW
     h=(360-e.alpha+360)%360;
   }
   if(h===null)return;
-  rawHeading=h;
+
+  // Buffer mediana circolare — elimina spike e tremore del sensore
+  headingBuf.push(h);
+  if(headingBuf.length>HEADING_BUF_SIZE)headingBuf.shift();
+
+  // Mediana su dati circolari: normalizza intorno al primo valore
+  const ref=headingBuf[0];
+  const norm=headingBuf.map(v=>{let d=v-ref;while(d>180)d-=360;while(d<-180)d+=360;return d;});
+  norm.sort((a,b)=>a-b);
+  const median=(norm[Math.floor(norm.length/2)]+norm[Math.ceil(norm.length/2)])/2;
+  rawHeading=((ref+median)%360+360)%360;
+
   if(!compassActive){
     compassActive=true;
-    compassHeading=h; // primo valore: niente interpolazione
+    compassHeading=rawHeading;
     document.getElementById('compass-btn').style.color='var(--green)';
-    document.getElementById('compass-btn').title='Bussola attiva: '+Math.round(h)+'°';
   }
 }
 
