@@ -449,14 +449,7 @@ function draw(){
   ctx.setLineDash([]);
   ctx.restore();
 
-  // Cardinali fissi
-  ctx.fillStyle='#00c0ffcc';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
-  ctx.fillText('N',cx,cy-R+18);
-  ctx.fillStyle='#00c0ff66';ctx.font='11px sans-serif';
-  ctx.fillText('S',cx,cy+R-8);
-  ctx.textAlign='left';ctx.fillText('O',cx-R+8,cy+4);
-  ctx.textAlign='right';ctx.fillText('E',cx+R-8,cy+4);
-  ctx.textAlign='left';
+
 
   // DOT AMICI
   const now=Date.now();
@@ -531,42 +524,43 @@ function draw(){
   ctx.fillStyle='#ffffff33';ctx.font='9px sans-serif';ctx.fillText('tocca',cx,cy+22);
   ctx.textAlign='left';
 
-  // ── Freccia N fissa in cima (Nord sempre in alto) ──
-  ctx.save();
-  ctx.translate(cx, cy-R+2);
-  ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(-6,5);ctx.lineTo(6,5);ctx.closePath();
-  ctx.fillStyle='#ffa040';ctx.shadowColor='#ffa040';ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;
-  ctx.fillStyle='#fff';ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText('N',0,-1);ctx.textBaseline='alphabetic';
-  ctx.restore();
+
 
   // ── Freccia tracking amico selezionato ──
   const _tf=trackedFriendId?friends[trackedFriendId]:null;
   if(_tf&&myLat!=null){
     const tf=_tf;
-    const sp=displayFriendPos[trackedFriendId]||{lat:tf.lat,lon:tf.lon};
+    const sp=displayFriendPos[trackedFriendId]||(tf.lat!=null?{lat:tf.lat,lon:tf.lon}:null);
     if(sp&&sp.lat!=null){
       const{dist:td,bearing:tb}=distBear(myLat,myLon,sp.lat,sp.lon);
       const ar=d2r(tb)-Math.PI/2;
       const tCol=tf.color||'#00c0ff';
-      // Arco colorato sul bordo ±25°
-      ctx.beginPath();ctx.arc(cx,cy,R,ar-0.44,ar+0.44);
-      ctx.strokeStyle=tCol+'88';ctx.lineWidth=5;ctx.stroke();
-      // Triangolo freccia
-      const ax=cx+(R+2)*Math.cos(ar), ay=cy+(R+2)*Math.sin(ar);
-      ctx.save();ctx.translate(ax,ay);ctx.rotate(ar+Math.PI/2);
-      ctx.beginPath();ctx.moveTo(0,-11);ctx.lineTo(-7,5);ctx.lineTo(7,5);ctx.closePath();
-      ctx.fillStyle=tCol;ctx.shadowColor=tCol;ctx.shadowBlur=16;ctx.fill();ctx.shadowBlur=0;
-      ctx.restore();
-      // Iniziale nome sulla freccia
-      ctx.fillStyle='#000';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillText((tf.name||'?')[0].toUpperCase(),ax,ay);ctx.textBaseline='alphabetic';
-      // Distanza sotto la freccia
+      const nm=tf.name||'?';
       const ds=td<1000?Math.round(td)+'m':(td/1000).toFixed(1)+'km';
-      const lx=cx+(R+22)*Math.cos(ar), ly=cy+(R+22)*Math.sin(ar);
-      ctx.fillStyle=tCol;ctx.font='bold 10px sans-serif';
-      ctx.textAlign=lx>cx?'left':'right';
-      ctx.fillText(ds,lx+(lx>cx?4:-4),ly+4);
+
+      // Arco sul bordo
+      ctx.beginPath();ctx.arc(cx,cy,R-3,ar-0.5,ar+0.5);
+      ctx.strokeStyle=tCol+'66';ctx.lineWidth=6;ctx.stroke();
+
+      // Freccia sul bordo che punta verso l'amico
+      const ax=cx+R*Math.cos(ar),ay=cy+R*Math.sin(ar);
+      ctx.save();
+      ctx.translate(ax,ay);
+      ctx.rotate(ar+Math.PI/2);
+      ctx.beginPath();
+      ctx.moveTo(0,-16);ctx.lineTo(-9,6);ctx.lineTo(0,1);ctx.lineTo(9,6);ctx.closePath();
+      ctx.fillStyle=tCol;ctx.shadowColor=tCol;ctx.shadowBlur=20;ctx.fill();ctx.shadowBlur=0;
+      ctx.fillStyle='rgba(0,0,0,0.85)';ctx.font='bold 10px sans-serif';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(nm[0].toUpperCase(),0,-5);
+      ctx.restore();ctx.textBaseline='alphabetic';
+
+      // Banner in basso: nome + distanza
+      const bh=28,by2=H-bh;
+      ctx.fillStyle='rgba(2,4,14,0.90)';ctx.fillRect(0,by2,W,bh);
+      ctx.fillStyle=tCol;ctx.fillRect(0,by2,4,bh);
+      ctx.fillStyle='#ffffffdd';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+      ctx.fillText('🎯 '+nm+'  •  '+ds, W/2, by2+19);
       ctx.textAlign='left';
     }
   }
