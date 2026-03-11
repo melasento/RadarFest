@@ -228,6 +228,7 @@ let friends={},predMap={};
 let gpsWatch=null,stTimer=null,mqttClient=null;
 let notifications=[];
 let sosTimer=null,sosAudioCtx=null,sosVibInterval=null,sosAudioInterval=null,sosCountdown=SOS_DURATION;
+let mySosActive=false; // true se sono IO il mittente SOS
 let sosFromId=null,sosFromPos=null,sosCdInterval=null,sosActiveId=null;
 let rawHeading=0,compassHeading=0,compassActive=false;
 const headingBuf=[];  // buffer mediana bussola
@@ -386,12 +387,15 @@ function handleRadarTap(tx,ty){
     if(trackedFriendId){trackedFriendId=null;showToast('🎯 Tracking disattivato');}
   }
 }
+let _lastTouch=0;
 cv.addEventListener('click',e=>{
+  if(Date.now()-_lastTouch<400)return; // ignora click ghost dopo touchend
   const r=cv.getBoundingClientRect();
   handleRadarTap(e.clientX-r.left,e.clientY-r.top);
 });
 cv.addEventListener('touchend',e=>{
   if(e.changedTouches.length!==1)return;
+  _lastTouch=Date.now();
   const r=cv.getBoundingClientRect(),t=e.changedTouches[0];
   handleRadarTap(t.clientX-r.left,t.clientY-r.top);
 },{passive:true});
@@ -793,6 +797,12 @@ function connectMQTT(){
           stopSOSAlert();
           showToast('✅ '+data.name+' ha risposto al SOS');
         }
+      }else if(type==='soscancel'){
+        // Il mittente ha annullato il suo SOS
+        if(sosActiveId===uid2){
+          stopSOSAlert();
+          showToast('ℹ️ SOS annullato da '+(data.name||'amico'));
+        }
         // Solo chi ha inviato il SOS riceve la notifica speciale
         if(data.target===myId){
           addNotification('✅ '+data.name+' ha confermato il tuo SOS',new Date());
@@ -811,13 +821,32 @@ function removeMQTT(){if(!mqttClient)return;const e=new Uint8Array(0);mqttClient
 // SOS
 // ══════════════════════════════════
 function triggerSOS(){
+  if(mySosActive){ cancelMySOS(); return; }
   if(!confirm('🚨 Inviare SOS a tutti gli amici del gruppo?\n\nUsare solo in caso di emergenza reale.'))return;
   if(!mqttClient){showToast('⚠️ Non connesso');return;}
+  mySosActive=true;
   mqttClient.publish(`fc/${groupId}/sos/${myId}`,JSON.stringify({name:myName,ts:Date.now()}),{retain:false,qos:1});
-  document.getElementById('sosB').classList.add('active');
-  document.getElementById('sosB').textContent='🆘 SOS inviato';
+  const btn=document.getElementById('sosB');
+  btn.classList.add('active');
+  btn.textContent='❌ Annulla SOS';
+  btn.style.background='#4a0010';
+  btn.style.animation='none';
   showToast('🚨 SOS inviato a tutti!');
-  setTimeout(()=>{document.getElementById('sosB').classList.remove('active');document.getElementById('sosB').textContent='🆘 SOS';},10000);
+}
+function cancelMySOS(){
+  if(!mqttClient){mySosActive=false;resetSOSButton();return;}
+  // Notifica annullamento a tutti
+  mqttClient.publish(`fc/${groupId}/soscancel/${myId}`,JSON.stringify({name:myName,ts:Date.now()}),{retain:false,qos:1});
+  mySosActive=false;
+  resetSOSButton();
+  showToast('✅ SOS annullato');
+}
+function resetSOSButton(){
+  const btn=document.getElementById('sosB');
+  btn.classList.remove('active');
+  btn.textContent='🆘 SOS — Emergenza';
+  btn.style.background='';
+  btn.style.animation='';
 }
 
 function startSOSAlert(senderName,senderId){
