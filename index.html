@@ -76,16 +76,16 @@ body{display:flex;flex-direction:column}
 #bb{background:#050A14;border-top:1px solid #0a2030;padding:8px 12px;flex-shrink:0}
 #bba{display:flex;align-items:center;gap:6px}
 /* SOS BUTTON */
-.sosB{padding:10px 18px;border-radius:12px;border:none;font-size:14px;font-weight:900;
+.sosB{flex:1;padding:12px 10px;border-radius:12px;border:none;font-size:17px;font-weight:900;
       cursor:pointer;background:var(--red);color:#fff;font-family:inherit;
-      letter-spacing:1px;flex-shrink:0;
+      letter-spacing:1px;
       box-shadow:0 0 0 0 rgba(255,51,68,0.7);
       animation:sosPulse 2s infinite}
-@keyframes sosPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,51,68,0.5)}70%{box-shadow:0 0 0 8px rgba(255,51,68,0)}}
+@keyframes sosPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,51,68,0.5)}70%{box-shadow:0 0 0 10px rgba(255,51,68,0)}}
 .sosB.active{background:#880011;animation:none;box-shadow:none}
-.waB{flex:1;padding:9px 10px;border-radius:10px;border:none;font-size:12px;font-weight:700;
+.waB{flex-shrink:0;padding:9px 10px;border-radius:10px;border:none;font-size:11px;font-weight:700;
      cursor:pointer;background:#25D366;color:#fff;font-family:inherit;
-     display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap}
+     display:flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap}
 .icB{padding:9px 10px;background:var(--bg2);border:1px solid var(--ring);
      color:var(--text);border-radius:10px;cursor:pointer;font-size:15px}
 /* SOS BANNER (sopra il radar, non blocca la vista) */
@@ -238,6 +238,7 @@ let gpsWatch=null,stTimer=null,mqttClient=null;
 let notifications=[];
 let sosTimer=null,sosAudioCtx=null,sosVibInterval=null,sosAudioInterval=null,sosCountdown=SOS_DURATION;
 let sosFromId=null,sosFromPos=null,sosCdInterval=null,sosActiveId=null;
+let rawHeading=0,compassHeading=0; // solo per la freccia nord, non per il radar
 let smoothFriendPos={}; // posizioni smussate per eliminare jitter GPS
 
 // ══════════════════════════════════
@@ -256,6 +257,9 @@ function distBear(la1,lo1,la2,lo2){
 }
 const cardinal=b=>['N','NE','E','SE','S','SO','O','NO'][Math.round(b/45)%8];
 
+
+// Interpolazione angolare wrap-safe
+function lerpAngle(cur,tgt,t){let d=tgt-cur;while(d>180)d-=360;while(d<-180)d+=360;return cur+d*t;}
 
 // Smoothing posizione GPS amici
 // Logica: dead zone + smoothing molto lento
@@ -333,6 +337,8 @@ function enterGroup(){
   document.getElementById('gnm').textContent='Gruppo '+groupId;
   setTimeout(fixCanvas,50);
   connectMQTT();startGps();
+  window.addEventListener('deviceorientationabsolute',onOrient,true);
+  window.addEventListener('deviceorientation',onOrient,true);
 
 }
 
@@ -442,6 +448,35 @@ function draw(){
   ctx.fillText('N',cx,cy-R+20);ctx.fillText('S',cx,cy+R-8);
   ctx.textAlign='left';ctx.fillText('O',cx-R+8,cy+5);ctx.textAlign='right';ctx.fillText('E',cx+R-8,cy+5);
   ctx.textAlign='left';
+
+  // ── Freccia orientamento: mostra dove sei rivolto sul bordo del radar ──
+  const fRad=d2r(compassHeading); // angolo rispetto al Nord (0=Nord, 90=Est)
+  const fX=cx+(R+2)*Math.sin(fRad);
+  const fY=cy-(R+2)*Math.cos(fRad);
+  // Arco colorato sul bordo (±20°) per indicare il campo visivo
+  ctx.beginPath();
+  ctx.arc(cx,cy,R,fRad-Math.PI/2-0.35,fRad-Math.PI/2+0.35);
+  ctx.strokeStyle='rgba(255,160,40,0.6)';ctx.lineWidth=4;ctx.stroke();
+  // Triangolo freccia sul bordo
+  ctx.save();
+  ctx.translate(fX,fY);
+  ctx.rotate(fRad);
+  ctx.beginPath();
+  ctx.moveTo(0,-10);   // punta verso l'esterno
+  ctx.lineTo(-6,4);
+  ctx.lineTo(6,4);
+  ctx.closePath();
+  ctx.fillStyle='#ffa040';
+  ctx.shadowColor='#ffa040';ctx.shadowBlur=12;
+  ctx.fill();ctx.shadowBlur=0;
+  ctx.restore();
+  // Label "TU" vicino alla freccia
+  const lblOff=22;
+  const lblX=cx+(R+lblOff)*Math.sin(fRad);
+  const lblY=cy-(R+lblOff)*Math.cos(fRad);
+  ctx.fillStyle='#ffa040';ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+  ctx.fillText('TU',lblX,lblY+3);
+  ctx.textAlign='left';
 }
 
 // ══════════════════════════════════
@@ -451,6 +486,7 @@ let prevT=0;
 function loop(t){
   const dt=Math.min((t-prevT)/1000,0.1);prevT=t;
   sweepAngle+=dt*1.2;
+  compassHeading=lerpAngle(compassHeading,rawHeading,0.06);
   draw();
   requestAnimationFrame(loop);
 }
@@ -475,6 +511,8 @@ function startGps(){
   },()=>{document.getElementById('gdot').className='gdot';document.getElementById('glbl').textContent='GPS off';},
   {enableHighAccuracy:true,maximumAge:5000,timeout:20000});
 }
+function onOrient(e){const h=e.webkitCompassHeading!==undefined?e.webkitCompassHeading:(e.absolute&&e.alpha!=null?e.alpha:null);if(h!=null)rawHeading=h;}
+
 setInterval(()=>{
   if(!gpsTs||!myLat)return;
   if((Date.now()-gpsTs)>30000){document.getElementById('gdot').className='gdot old';document.getElementById('glbl').textContent='GPS vecchio ±'+(myAcc||'?')+'m';}
