@@ -230,6 +230,7 @@ let sosTimer=null,sosAudioCtx=null,sosVibInterval=null,sosAudioInterval=null,sos
 let sosFromId=null,sosFromPos=null,sosCdInterval=null,sosActiveId=null;
 let rawHeading=0,compassHeading=0;
 let selectedFriendId=null;
+let _hasAbsOri=false; // true se deviceorientationabsolute sta funzionando
 let smoothFriendPos={}; // posizioni smussate per eliminare jitter GPS
 
 // ══════════════════════════════════
@@ -427,24 +428,18 @@ function draw(){
     const ar=d2r(bearing)-Math.PI/2;
     const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
     const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>90000?col+'88':col; // stale=90s, mantieni colore ma semitrasparente
-    // Distanza formattata: sotto 1000m → 'XXXm', sopra → 'X.Xkm'
     const nm=f.name||'?';
     const ds=dist<1000?Math.round(dist)+'m':(dist/1000).toFixed(1)+'km';
-    // Box nome
     ctx.font='bold 12px sans-serif';
     const twNm=ctx.measureText(nm).width;
-    // Box distanza — font più grande e nel colore dell'amico
     ctx.font='bold 14px sans-serif';
     const twDs=ctx.measureText(ds).width;
     const tw=Math.max(twNm,twDs)+12;
     const th=34,lx=fx<cx?fx-tw-8:fx+14,ly=fy-14;
-    // Sfondo con bordo colorato
     ctx.fillStyle='rgba(2,4,14,0.88)';ctx.strokeStyle=fc+'66';ctx.lineWidth=1;
     ctx.beginPath();ctx.roundRect(lx-2,ly,tw+2,th,5);ctx.fill();ctx.stroke();
-    // Nome
     ctx.fillStyle='#ffffffdd';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
     ctx.fillText(nm,lx,ly+14);
-    // Distanza — più grande, nel colore amico
     ctx.fillStyle=fc;ctx.font='bold 14px sans-serif';
     ctx.fillText(ds,lx,ly+30);
   });
@@ -543,16 +538,33 @@ function startGps(){
   {enableHighAccuracy:true,maximumAge:5000,timeout:20000});
 }
 function onOrient(e){
-  if(selectedFriendId)return;
+  if(selectedFriendId)return; // bussola puntata su amico, ignora device
   let h=null;
+
   if(e.webkitCompassHeading!=null){
-    // iOS: heading diretto, 0=Nord, crescente in senso orario ✓
+    // ── iOS: heading assoluto diretto, 0=Nord, senso orario ──
     h=e.webkitCompassHeading;
-  } else if(e.absolute && e.alpha!=null){
-    // Android deviceorientationabsolute: alpha cresce in senso ANTIORARIO
-    // quindi l'heading reale = (360 - alpha) % 360
-    h=(360-e.alpha)%360;
+
+  } else if(e.alpha!=null){
+    // ── Android (tutti i modelli) ──
+    // alpha cresce in senso ANTIORARIO → heading = (360 - alpha) % 360
+    const heading=(360-e.alpha)%360;
+
+    if(e.absolute){
+      // deviceorientationabsolute: heading calibrato al Nord magnetico ✓
+      _hasAbsOri=true;
+      h=heading;
+    } else if(!_hasAbsOri){
+      // deviceorientation NON assoluto: usato come fallback se
+      // deviceorientationabsolute non è mai arrivato (es. Galaxy A25, Samsung
+      // con Chrome che non spara l'evento absolute)
+      // NB: l'ago parte dall'orientamento iniziale del telefono, non dal Nord
+      // ma la rotazione è corretta — mostra almeno il movimento
+      h=heading;
+    }
+    // Se _hasAbsOri=true e e.absolute=false: ignora (è rumore, abbiamo già il dato buono)
   }
+
   if(h!=null) rawHeading=h;
 }
 
@@ -569,8 +581,17 @@ async function requestCompassPermission(){
     }catch(e){}
   } else {
     // Android / altri: permesso non richiesto
+    // Ascolta entrambi: absolute ha priorità, deviceorientation è fallback
     window.addEventListener('deviceorientationabsolute',onOrient,true);
     window.addEventListener('deviceorientation',onOrient,true);
+    // Timeout: se dopo 3s non arriva nessun evento absolute, sveglia il fallback
+    setTimeout(()=>{
+      if(!_hasAbsOri){
+        // Su questo device deviceorientationabsolute non funziona
+        // Il fallback (deviceorientation) è già attivo
+        console.warn('deviceorientationabsolute non disponibile, uso fallback relativo');
+      }
+    },3000);
   }
 }
 
