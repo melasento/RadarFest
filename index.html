@@ -427,13 +427,26 @@ function draw(){
     const ar=d2r(bearing)-Math.PI/2;
     const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
     const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>90000?col+'88':col; // stale=90s, mantieni colore ma semitrasparente
-    const nm=f.name||'?',ds=Math.round(dist)+'m';
-    ctx.font='bold 11px sans-serif';
-    const tw=Math.max(ctx.measureText(nm).width,ctx.measureText(ds).width)+10;
-    const th=28,lx=fx<cx?fx-tw-6:fx+14,ly=fy-10;
-    ctx.fillStyle='rgba(2,4,14,0.82)';ctx.fillRect(lx-2,ly,tw+2,th);
-    ctx.fillStyle='#ffffffee';ctx.font='bold 11px sans-serif';ctx.textAlign='left';ctx.fillText(nm,lx,ly+13);
-    ctx.fillStyle=fc;ctx.font='10px sans-serif';ctx.fillText(ds,lx,ly+25);
+    // Distanza formattata: sotto 1000m → 'XXXm', sopra → 'X.Xkm'
+    const nm=f.name||'?';
+    const ds=dist<1000?Math.round(dist)+'m':(dist/1000).toFixed(1)+'km';
+    // Box nome
+    ctx.font='bold 12px sans-serif';
+    const twNm=ctx.measureText(nm).width;
+    // Box distanza — font più grande e nel colore dell'amico
+    ctx.font='bold 14px sans-serif';
+    const twDs=ctx.measureText(ds).width;
+    const tw=Math.max(twNm,twDs)+12;
+    const th=34,lx=fx<cx?fx-tw-8:fx+14,ly=fy-14;
+    // Sfondo con bordo colorato
+    ctx.fillStyle='rgba(2,4,14,0.88)';ctx.strokeStyle=fc+'66';ctx.lineWidth=1;
+    ctx.beginPath();ctx.roundRect(lx-2,ly,tw+2,th,5);ctx.fill();ctx.stroke();
+    // Nome
+    ctx.fillStyle='#ffffffdd';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
+    ctx.fillText(nm,lx,ly+14);
+    // Distanza — più grande, nel colore amico
+    ctx.fillStyle=fc;ctx.font='bold 14px sans-serif';
+    ctx.fillText(ds,lx,ly+30);
   });
   // IO
   ctx.beginPath();ctx.arc(cx,cy,7,0,Math.PI*2);ctx.fillStyle=myColor;ctx.shadowColor=myColor;ctx.shadowBlur=18;ctx.fill();ctx.shadowBlur=0;
@@ -447,7 +460,7 @@ function draw(){
   ctx.textAlign='left';
 
   // ── Freccia bussola: amico selezionato = Nord | altrimenti direzione device ──
-  let _fAngle=compassHeading, _fColor='#ffa040', _fLabel='TU';
+  let _fAngle=compassHeading,_fColor='#ffa040',_fLabel='TU';
   const _sf=selectedFriendId?friends[selectedFriendId]:null;
   if(_sf&&_sf.lat!=null&&myLat!=null){
     _fAngle=distBear(myLat,myLon,_sf.lat,_sf.lon).bearing;
@@ -776,16 +789,21 @@ function renderLista(){
   el.innerHTML=list.map(f=>{
     const col=f.color||'#00c0ff';
     const db2=(f.lat&&myLat)?distBear(myLat,myLon,f.lat,f.lon):null;
-    const ds=db2?Math.round(db2.dist)+'m':'—',dr=db2?cardinal(db2.bearing):'—';
+    const rawDist=db2?db2.dist:null;
+    const ds=rawDist==null?'—':rawDist<1000?Math.round(rawDist)+'m':(rawDist/1000).toFixed(1)+'km';
+    const dr=db2?cardinal(db2.bearing):'—';
+    const age=Date.now()-(f.ts||0);
     const isSel=(f.id===selectedFriendId);
     return `<div class="fr" style="${isSel?`border-color:${col};box-shadow:0 0 10px ${col}55`:''}" onclick="selectFriend('${f.id}')">
       <div class="av" style="border-color:${col};color:${col};background:${hex2rgba(col,.15)}">${(f.name||'?')[0].toUpperCase()}</div>
       <div class="fi">
         <div class="fn">${f.name||'Amico'}</div>
-        <div class="fs">${dr} · <span style="color:${(Date.now()-(f.ts||0))>90000?'var(--orange)':'var(--green)'}">GPS</span></div>
+        <div class="fs">${dr} · <span style="color:${age>90000?'var(--orange)':'var(--green)'}">GPS</span></div>
       </div>
-      <div class="fd" style="color:${col}">${ds}</div>
-      <div style="font-size:20px;padding-left:6px">${isSel?'🎯':'⊙'}</div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:20px;font-weight:900;color:${col};font-variant-numeric:tabular-nums">${ds}</div>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px">${isSel?'🎯 puntato':'⊙ seleziona'}</div>
+      </div>
     </div>`;
   }).join('');
 }
