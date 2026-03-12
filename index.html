@@ -215,7 +215,7 @@ body{display:flex;flex-direction:column}
 // ══════════════════════════════════
 const BROKER='wss://broker.emqx.io:8084/mqtt';
 const COLORS=['#00e87a','#00c0ff','#ff6b6b','#ffa040','#c084fc','#facc15','#f472b6','#38bdf8','#4ade80','#fb923c'];
-const SEP_THR=200,MAX_R=500;
+const SEP_THR=150,MAX_R=200;
 const SOS_DURATION=120; // secondi
 
 // ══════════════════════════════════
@@ -446,23 +446,20 @@ function draw(){
   ctx.textAlign='left';ctx.fillText('O',cx-R+8,cy+5);ctx.textAlign='right';ctx.fillText('E',cx+R-8,cy+5);
   ctx.textAlign='left';
 
-  // ── Freccia: punta verso amico selezionato OPPURE bussola device ──
-  // Calcola bearing target direttamente — nessuna dipendenza da rawHeading
-  let _fDeg=compassHeading, _fColor='#ffa040', _fLabel='TU';
+  // ── Freccia bussola: amico selezionato = Nord | altrimenti direzione device ──
+  let _fAngle=compassHeading, _fColor='#ffa040', _fLabel='TU';
   const _sf=selectedFriendId?friends[selectedFriendId]:null;
-  if(_sf && _sf.lat!=null && myLat!=null){
-    _fDeg   = distBear(myLat,myLon,_sf.lat,_sf.lon).bearing;
-    _fColor = _sf.color||'#00c0ff';
-    _fLabel = (_sf.name||'?').slice(0,8);
+  if(_sf&&_sf.lat!=null&&myLat!=null){
+    _fAngle=distBear(myLat,myLon,_sf.lat,_sf.lon).bearing;
+    _fColor=_sf.color||'#00c0ff';
+    _fLabel=(_sf.name||'?').slice(0,8);
   }
-  const fRad=d2r(_fDeg);
+  const fRad=d2r(_fAngle);
   const fX=cx+(R+2)*Math.sin(fRad);
   const fY=cy-(R+2)*Math.cos(fRad);
-  // Arco colorato sul bordo
   ctx.beginPath();
   ctx.arc(cx,cy,R,fRad-Math.PI/2-0.35,fRad-Math.PI/2+0.35);
   ctx.strokeStyle=_fColor+'99';ctx.lineWidth=4;ctx.stroke();
-  // Triangolo freccia
   ctx.save();
   ctx.translate(fX,fY);
   ctx.rotate(fRad);
@@ -475,7 +472,6 @@ function draw(){
   ctx.shadowColor=_fColor;ctx.shadowBlur=12;
   ctx.fill();ctx.shadowBlur=0;
   ctx.restore();
-  // Label (nome amico o "TU")
   const lblOff=22;
   const lblX=cx+(R+lblOff)*Math.sin(fRad);
   const lblY=cy-(R+lblOff)*Math.cos(fRad);
@@ -497,21 +493,20 @@ function loop(t){
 }
 requestAnimationFrame(loop);
 
-// Tap sul radar per selezionare amico
 cv.addEventListener('click',function(e){
   const rect=cv.getBoundingClientRect();
   const mx=(e.clientX-rect.left)*(cv.width/rect.width);
   const my=(e.clientY-rect.top)*(cv.height/rect.height);
-  const cx=cv.width/2,cy=cv.height/2,R=Math.min(cv.width,cv.height)/2-14;
+  const CX=cv.width/2,CY=cv.height/2,R=Math.min(cv.width,cv.height)/2-14;
   let hit=null;
   Object.values(friends).forEach(f=>{
     if(!f.lat||!myLat)return;
     const{dist,bearing}=distBear(myLat,myLon,f.lat,f.lon);
-    const r=R*Math.min(dist/MAXR,0.96);
+    const r=R*Math.min(dist/MAX_R,0.96);
     const ar=d2r(bearing)-Math.PI/2;
-    if(Math.hypot(mx-(cx+r*Math.cos(ar)),my-(cy+r*Math.sin(ar)))<28)hit=f.id;
+    if(Math.hypot(mx-(CX+r*Math.cos(ar)),my-(CY+r*Math.sin(ar)))<28)hit=f.id;
   });
-  if(hit!==null)selectedFriendId=(hit===selectedFriendId)?null:hit;
+  if(hit!==null)selectFriend(hit);
 });
 
 
@@ -773,24 +768,24 @@ function switchTab(t){
 }
 function selectFriend(id){
   selectedFriendId=(selectedFriendId===id)?null:id;
-  switchTab('r'); // torna al radar
+  switchTab('r');
 }
 function renderLista(){
   const el=document.getElementById('lista'),list=Object.values(friends);
   if(!list.length){el.innerHTML=`<div style="color:var(--dim);text-align:center;margin-top:60px;font-size:13px;line-height:2">Nessun amico.<br>Codice: <b style="color:var(--cyan)">${groupId}</b></div>`;return;}
   el.innerHTML=list.map(f=>{
-    const col=f.color||'#00c0ff',pr=predictPos(f);
+    const col=f.color||'#00c0ff';
     const db2=(f.lat&&myLat)?distBear(myLat,myLon,f.lat,f.lon):null;
     const ds=db2?Math.round(db2.dist)+'m':'—',dr=db2?cardinal(db2.bearing):'—';
     const isSel=(f.id===selectedFriendId);
-    return `<div class="fr" style="${isSel?'border-color:'+col+';box-shadow:0 0 8px '+col+'44':''}" onclick="selectFriend('${f.id}')">
+    return `<div class="fr" style="${isSel?`border-color:${col};box-shadow:0 0 10px ${col}55`:''}" onclick="selectFriend('${f.id}')">
       <div class="av" style="border-color:${col};color:${col};background:${hex2rgba(col,.15)}">${(f.name||'?')[0].toUpperCase()}</div>
       <div class="fi">
         <div class="fn">${f.name||'Amico'}</div>
         <div class="fs">${dr} · <span style="color:${(Date.now()-(f.ts||0))>90000?'var(--orange)':'var(--green)'}">GPS</span></div>
       </div>
       <div class="fd" style="color:${col}">${ds}</div>
-      <div style="font-size:18px;padding-left:6px">${isSel?'🎯':'○'}</div>
+      <div style="font-size:20px;padding-left:6px">${isSel?'🎯':'⊙'}</div>
     </div>`;
   }).join('');
 }
