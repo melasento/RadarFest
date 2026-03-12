@@ -1,128 +1,815 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RadarFest</title>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+<title>Friend Compass</title>
+<script src="https://unpkg.com/mqtt@5/dist/mqtt.min.js"></script>
 <style>
-body{
-    font-family: Arial, sans-serif;
-    text-align:center;
-    background:#111;
-    color:white;
-}
-#compass{
-    width:250px;
-    height:250px;
-    margin:30px auto;
-    border:4px solid #555;
-    border-radius:50%;
-    position:relative;
-}
-#needle{
-    width:4px;
-    height:110px;
-    background:red;
-    position:absolute;
-    bottom:50%;
-    left:50%;
-    transform-origin:bottom center;
-    transform:rotate(0deg);
-}
-.friend{
-    padding:10px;
-    margin:5px;
-    background:#222;
-    cursor:pointer;
-    border-radius:6px;
-}
-.friend:hover{
-    background:#333;
-}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--bg:#050813;--bg2:#07111f;--bg3:#040c18;--green:#00e87a;--cyan:#00c0ff;
+      --orange:#ffa040;--red:#ff3344;--ring:#1a3a4a;--text:#e0eef5;--dim:#4a7a99}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Segoe UI',Roboto,sans-serif;overflow:hidden}
+body{display:flex;flex-direction:column}
+.screen{display:none;flex-direction:column;flex:1;overflow:hidden}
+.screen.active{display:flex}
+/* LANDING */
+#s-landing{align-items:center;justify-content:center;gap:16px;padding:28px 20px;overflow-y:auto}
+.logo{font-size:56px}.title{font-size:24px;font-weight:800}.sub{font-size:12px;color:var(--dim)}
+.card{background:var(--bg2);border:1px solid var(--ring);border-radius:16px;padding:18px 20px;width:100%;max-width:360px}
+.ct{font-size:13px;font-weight:700;color:var(--cyan);margin-bottom:12px}
+.field{width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--ring);border-radius:10px;
+       color:var(--text);font-size:14px;outline:none;margin-bottom:10px;font-family:inherit}
+.field::placeholder{color:var(--dim)}
+.btn{width:100%;padding:11px;border-radius:11px;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+.btn-g{background:var(--green);color:#000}.btn-b{background:#0077cc;color:#fff;margin-top:6px}
+.btn-ghost{background:transparent;border:1px solid var(--ring);color:var(--dim);margin-top:8px}
+.hint{color:var(--dim);font-size:11px;text-align:center}
+/* NOME */
+#s-name{align-items:center;justify-content:center;padding:24px 20px}
+#s-name .card{max-width:360px}
+.crow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;justify-content:center}
+.sw{width:34px;height:34px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:transform .15s}
+.sw.sel{border-color:#fff;transform:scale(1.18)}
+/* TOPBAR */
+#topbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--bg2);
+        border-bottom:1px solid var(--ring);flex-shrink:0}
+.gdot{width:8px;height:8px;border-radius:50%;background:#444;transition:all .4s;flex-shrink:0}
+.gdot.wait{background:#f0c000;box-shadow:0 0 6px #f0c000;animation:blink 1.2s infinite}
+.gdot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+.gdot.old{background:var(--orange);box-shadow:0 0 6px var(--orange)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.glbl{font-size:11px;color:var(--dim);white-space:nowrap;flex-shrink:0}
+.dvd{width:1px;height:18px;background:var(--ring);flex-shrink:0}
+.gnm{font-size:14px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cbdg{font-size:11px;color:var(--cyan);background:#0a1a2a;border:1px solid #1a3a4a;
+      padding:2px 8px;border-radius:8px;letter-spacing:1.5px;cursor:pointer;flex-shrink:0}
+.mct{font-size:11px;color:var(--green);flex-shrink:0}
+.tacts{display:flex;gap:4px;flex-shrink:0}
+.tbtn{width:32px;height:32px;border-radius:50%;border:none;cursor:pointer;font-size:15px;
+      background:var(--bg3);color:var(--text);display:flex;align-items:center;justify-content:center;position:relative}
+.tbtn.g{background:#00c06033;color:var(--green)}
+.tbtn.r{background:#cc220033;color:#ff6060}
+.notif-badge{position:absolute;top:-2px;right:-2px;width:14px;height:14px;border-radius:50%;
+             background:var(--red);color:#fff;font-size:9px;font-weight:700;
+             display:none;align-items:center;justify-content:center}
+.notif-badge.show{display:flex}
+/* TABS */
+#tabs{display:flex;flex-shrink:0}
+.tab{flex:1;padding:8px 0;text-align:center;font-size:13px;cursor:pointer;
+     border-bottom:2px solid transparent;background:var(--bg3);color:var(--dim)}
+.tab.active{color:var(--green);border-bottom:2px solid var(--green);background:var(--bg)}
+/* RADAR */
+#radar-wrap{flex:1;position:relative;overflow:hidden;background:#02040A}
+#cv{position:absolute;top:0;left:0;width:100%;height:100%}
+/* LISTA */
+#lista{flex:1;overflow-y:auto;padding:12px 14px;display:none;background:var(--bg)}
+.fr{display:flex;align-items:center;gap:12px;padding:11px 14px;margin-bottom:9px;
+    background:var(--bg2);border-radius:12px;border:1px solid var(--ring)}
+.av{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;
+    justify-content:center;font-weight:800;font-size:15px;flex-shrink:0;border:2.5px solid}
+.fi{flex:1;min-width:0}
+.fn{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fs{font-size:11px;color:var(--dim);margin-top:3px}
+.fd{font-size:18px;font-weight:700;flex-shrink:0}
+/* BOTTOMBAR */
+#bb{background:#050A14;border-top:1px solid #0a2030;padding:8px 12px;flex-shrink:0}
+/* SOS BUTTON */
+.sosB{width:100%;padding:13px 10px;border-radius:12px;border:none;font-size:17px;font-weight:900;
+      cursor:pointer;background:var(--red);color:#fff;font-family:inherit;
+      letter-spacing:1px;
+      box-shadow:0 0 0 0 rgba(255,51,68,0.7);
+      animation:sosPulse 2s infinite}
+@keyframes sosPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,51,68,0.5)}70%{box-shadow:0 0 0 10px rgba(255,51,68,0)}}
+.sosB.active{background:#880011;animation:none;box-shadow:none}
+/* waB e icB rimossi dal bottom, ora in topbar */
+/* SOS BANNER (sopra il radar, non blocca la vista) */
+#sos-banner{position:absolute;top:0;left:0;right:0;z-index:100;display:none;
+            background:rgba(160,0,20,0.92);backdrop-filter:blur(4px);
+            padding:10px 14px;flex-direction:row;align-items:center;gap:10px;
+            border-bottom:2px solid var(--red);animation:sosFade .3s ease}
+#sos-banner.show{display:flex}
+@keyframes sosFade{from{opacity:0}to{opacity:1}}
+.sos-banner-icon{font-size:22px;animation:sosBounce .4s infinite alternate;flex-shrink:0}
+@keyframes sosBounce{from{transform:scale(0.9)}to{transform:scale(1.1)}}
+.sos-banner-info{flex:1;min-width:0}
+.sos-banner-title{font-size:13px;font-weight:900;color:#fff;letter-spacing:.5px}
+.sos-banner-from{font-size:11px;color:#ffbbbb;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sos-banner-cd{font-size:22px;font-weight:900;color:#fff;font-variant-numeric:tabular-nums;flex-shrink:0}
+.sos-stop{padding:8px 14px;border-radius:10px;border:none;font-size:12px;font-weight:700;
+          cursor:pointer;background:#fff;color:#cc0011;font-family:inherit;flex-shrink:0}
+/* NOTIFICHE PANEL */
+#notif-panel{position:fixed;top:46px;right:0;width:280px;background:var(--bg2);
+             border:1px solid var(--ring);border-radius:0 0 0 12px;z-index:500;
+             display:none;max-height:60vh;overflow-y:auto}
+#notif-panel.show{display:block}
+.notif-header{padding:10px 14px;font-size:12px;font-weight:700;color:var(--cyan);
+              border-bottom:1px solid var(--ring);display:flex;justify-content:space-between}
+.notif-item{padding:10px 14px;border-bottom:1px solid var(--ring);font-size:12px}
+.notif-item .ni-title{font-weight:700;color:var(--red);margin-bottom:3px}
+.notif-item .ni-time{color:var(--dim);font-size:11px}
+.notif-empty{padding:20px;text-align:center;color:var(--dim);font-size:12px}
+/* TOAST / WARN */
+#toast{position:fixed;bottom:76px;left:50%;transform:translateX(-50%);
+       background:var(--green);color:#000;padding:8px 20px;border-radius:20px;
+       font-size:13px;font-weight:700;opacity:0;pointer-events:none;
+       transition:opacity .3s;z-index:999;max-width:94vw;text-align:center}
+#toast.show{opacity:1}
+#warn{position:fixed;top:46px;left:0;right:0;background:#cc220099;backdrop-filter:blur(4px);
+      color:#fff;padding:7px;text-align:center;font-size:12px;font-weight:700;display:none;z-index:997}
+#warn.show{display:block}
 </style>
 </head>
 <body>
 
-<h1>RadarFest</h1>
-<p>Tocca un amico per far puntare la bussola verso di lui</p>
-
-<div id="compass">
-    <div id="needle"></div>
+<!-- LANDING -->
+<div class="screen active" id="s-landing">
+  <div class="logo">🧭</div>
+  <div class="title">Friend Compass</div>
+  <div class="sub">Trova i tuoi amici in tempo reale</div>
+  <div class="card">
+    <div class="ct">✨ Crea un gruppo</div>
+    <button class="btn btn-g" onclick="startCreate()">Crea gruppo</button>
+  </div>
+  <div class="card">
+    <div class="ct">🔗 Entra con codice</div>
+    <input class="field" id="code-inp" maxlength="8" placeholder="Codice (es. GNL8U7)" autocapitalize="characters"/>
+    <button class="btn btn-b" onclick="startJoin()">Unisciti al gruppo</button>
+  </div>
+  <p class="hint">Nessun account · Dati eliminati all'uscita</p>
 </div>
 
-<h3>Amici</h3>
-<div id="friends"></div>
+<!-- NOME + COLORE -->
+<div class="screen" id="s-name">
+  <div class="card" style="max-width:360px;margin:auto">
+    <div class="ct">👤 Come ti chiami?</div>
+    <input class="field" id="name-inp" maxlength="20" placeholder="Es. Marco"/>
+    <div class="ct" style="margin-top:4px">🎨 Scegli colore</div>
+    <div class="crow" id="crow"></div>
+    <button class="btn btn-g" onclick="confirmName()">Entra →</button>
+    <button class="btn btn-ghost" onclick="goLanding()">← Indietro</button>
+  </div>
+</div>
+
+<!-- RADAR SCREEN -->
+<div class="screen" id="s-radar">
+  <div id="topbar">
+    <div class="gdot wait" id="gdot"></div>
+    <div class="glbl" id="glbl">GPS...</div>
+    <div class="dvd"></div>
+    <div class="gnm" id="gnm">Gruppo</div>
+    <div class="cbdg" id="cbdg" onclick="copyCode()">—</div>
+    <div class="mct" id="mct">1 membro</div>
+    <div class="tacts">
+      <button class="tbtn" id="bell-btn" onclick="toggleNotifPanel()">
+        🔔<div class="notif-badge" id="notif-badge">0</div>
+      </button>
+      <button class="tbtn g" onclick="shareWA()" title="Invita su WhatsApp">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      </button>
+      <button class="tbtn" onclick="copyLink()" title="Copia link">🔗</button>
+      <button class="tbtn r" onclick="leaveGroup()">✕</button>
+    </div>
+  </div>
+
+  <!-- PANNELLO NOTIFICHE -->
+  <div id="notif-panel">
+    <div class="notif-header">
+      <span>🔔 Notifiche</span>
+      <span style="cursor:pointer;color:var(--dim)" onclick="clearNotifs()">Cancella</span>
+    </div>
+    <div id="notif-list"><div class="notif-empty">Nessuna notifica</div></div>
+  </div>
+
+  <div id="tabs">
+    <div class="tab active" id="tab-r" onclick="switchTab('r')">🎯 Radar</div>
+    <div class="tab" id="tab-l" onclick="switchTab('l')">☰ <span id="lcnt">Lista (0)</span></div>
+  </div>
+  <div id="radar-wrap">
+    <canvas id="cv"></canvas>
+    <!-- SOS BANNER (sul radar, non blocca) -->
+    <div id="sos-banner">
+      <div class="sos-banner-icon">🚨</div>
+      <div class="sos-banner-info">
+        <div class="sos-banner-title">⚠ EMERGENZA SOS</div>
+        <div class="sos-banner-from" id="sos-from">Da: —</div>
+      </div>
+      <div class="sos-banner-cd" id="sos-cd">2:00</div>
+      <button class="sos-stop" onclick="manualStopSOS()">✓ OK</button>
+    </div>
+  </div>
+  <div id="lista"></div>
+  <div id="bb">
+    <button class="sosB" id="sosB" onclick="triggerSOS()">🆘 SOS — Emergenza</button>
+  </div>
+</div>
+
+
+
+<div id="warn">⚠️ Un amico si è allontanato oltre 200m!</div>
+<div id="toast"></div>
 
 <script>
+// ══════════════════════════════════
+// CONFIG
+// ══════════════════════════════════
+const BROKER='wss://broker.emqx.io:8084/mqtt';
+const COLORS=['#00e87a','#00c0ff','#ff6b6b','#ffa040','#c084fc','#facc15','#f472b6','#38bdf8','#4ade80','#fb923c'];
+const SEP_THR=200,MAX_R=500;
+const SOS_DURATION=120; // secondi
 
-let myLat=null;
-let myLon=null;
-let heading=0;
-let selectedFriend=null;
+// ══════════════════════════════════
+// STATO
+// ══════════════════════════════════
+let selColor=COLORS[1],myId=null,myName='',myColor=COLORS[1],groupId=null;
+let myLat=null,myLon=null,myAcc=null,gpsTs=0;
+let friends={},predMap={};
+let gpsWatch=null,stTimer=null,mqttClient=null;
+let notifications=[];
+let sosTimer=null,sosAudioCtx=null,sosVibInterval=null,sosAudioInterval=null,sosCountdown=SOS_DURATION;
+let sosFromId=null,sosFromPos=null,sosCdInterval=null,sosActiveId=null;
+let rawHeading=0,compassHeading=0; // solo per la freccia nord, non per il radar
+let selectedFriendId=null; // amico selezionato: bussola punta verso di lui
+let smoothFriendPos={}; // posizioni smussate per eliminare jitter GPS
 
-// amici di esempio
-const friends=[
-{ name:"Marco", lat:41.9028, lon:12.4964 },
-{ name:"Luca", lat:41.9038, lon:12.4974 },
-{ name:"Sara", lat:41.9018, lon:12.4954 }
-];
+// ══════════════════════════════════
+// UTILS
+// ══════════════════════════════════
+const uid=()=>Math.random().toString(36).substr(2,9)+Date.now().toString(36);
+const rndCode=()=>Math.random().toString(36).substr(2,6).toUpperCase();
+const d2r=d=>d*Math.PI/180;
+function hex2rgba(h,a){const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return `rgba(${r},${g},${b},${a})`;}
+function distBear(la1,lo1,la2,lo2){
+  const R=6371000,f1=d2r(la1),f2=d2r(la2),df=d2r(la2-la1),dl=d2r(lo2-lo1);
+  const a=Math.sin(df/2)**2+Math.cos(f1)*Math.cos(f2)*Math.sin(dl/2)**2;
+  const dist=R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  const y=Math.sin(dl)*Math.cos(f2),x=Math.cos(f1)*Math.sin(f2)-Math.sin(f1)*Math.cos(f2)*Math.cos(dl);
+  return{dist,bearing:(Math.atan2(y,x)*180/Math.PI+360)%360};
+}
+const cardinal=b=>['N','NE','E','SE','S','SO','O','NO'][Math.round(b/45)%8];
 
-const container=document.getElementById("friends");
 
-friends.forEach(f=>{
-    const div=document.createElement("div");
-    div.className="friend";
-    div.textContent=f.name;
-    div.onclick=()=>{selectedFriend=f};
-    container.appendChild(div);
-});
+// Interpolazione angolare wrap-safe
+function lerpAngle(cur,tgt,t){let d=tgt-cur;while(d>180)d-=360;while(d<-180)d+=360;return cur+d*t;}
 
-function toRad(d){return d*Math.PI/180}
-function toDeg(r){return r*180/Math.PI}
+// Smoothing posizione GPS amici — Kalman-like con peso sull'accuratezza
+// Più il GPS è preciso (acc bassa), più il nuovo punto viene accettato
+// Se il GPS è impreciso (acc alta), si muove poco → niente jitter
+function updateSmoothedPos(id, newLat, newLon, acc){
+  const A = acc||40; // accuratezza dichiarata dal telefono in metri
 
-function getBearing(lat1,lon1,lat2,lon2){
+  // Dead zone adattiva: metà dell'accuratezza (sotto questo = puro rumore)
+  const DEAD_ZONE = Math.max(A * 0.6, 15);
+  // Salto reale: oltre 3× l'accuratezza = l'amico si è davvero spostato
+  const JUMP_THR = Math.max(A * 3, 80);
+  // Peso adattivo: GPS preciso (acc=10) → peso=0.9, impreciso (acc=80) → peso=0.15
+  const weight = Math.min(0.9, Math.max(0.10, 25 / A));
 
-    const φ1=toRad(lat1);
-    const φ2=toRad(lat2);
-    const Δλ=toRad(lon2-lon1);
+  if(!smoothFriendPos[id]){
+    smoothFriendPos[id]={lat:newLat,lon:newLon,acc:A};
+    return;
+  }
+  const prev=smoothFriendPos[id];
+  const{dist}=distBear(prev.lat,prev.lon,newLat,newLon);
 
-    const y=Math.sin(Δλ)*Math.cos(φ2);
-    const x=Math.cos(φ1)*Math.sin(φ2)-
-            Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
+  if(dist < DEAD_ZONE) return; // Rumore puro, ignora
 
-    const θ=Math.atan2(y,x);
-    return (toDeg(θ)+360)%360;
+  if(dist > JUMP_THR){
+    // Movimento reale ampio: accetta subito
+    smoothFriendPos[id]={lat:newLat,lon:newLon,acc:A};
+    return;
+  }
+  // Fusione pesata: più il GPS è preciso più ci fidiamo
+  smoothFriendPos[id]={
+    lat: prev.lat*(1-weight) + newLat*weight,
+    lon: prev.lon*(1-weight) + newLon*weight,
+    acc: A
+  };
+}
+function predictPos(f){
+  const p=predMap[f.id];
+  if(!p||f.lat===null)return{lat:f.lat,lon:f.lon};
+  const dt=(Date.now()-(f.ts||0))/1000;if(dt<20)return{lat:f.lat,lon:f.lon};
+  const ds=(f.ts-p.ts)/1000;if(ds<=0)return{lat:f.lat,lon:f.lon};
+  return{lat:f.lat+(f.lat-p.lat)/ds*Math.min(dt,30),lon:f.lon+(f.lon-p.lon)/ds*Math.min(dt,30)};
+}
+function fmtTime(d){return d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});}
+
+// ══════════════════════════════════
+// COLOR PICKER
+// ══════════════════════════════════
+function buildPicker(){
+  const el=document.getElementById('crow');el.innerHTML='';
+  COLORS.forEach(c=>{
+    const s=document.createElement('div');
+    s.className='sw'+(c===selColor?' sel':'');s.style.background=c;
+    s.onclick=()=>{selColor=c;document.querySelectorAll('.sw').forEach(x=>x.classList.remove('sel'));s.classList.add('sel');};
+    el.appendChild(s);
+  });
 }
 
-function update(){
+// ══════════════════════════════════
+// NAV
+// ══════════════════════════════════
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
+function goLanding(){show('s-landing');groupId=null;}
+function startCreate(){groupId=rndCode();buildPicker();show('s-name');setTimeout(()=>document.getElementById('name-inp').focus(),80);}
+function startJoin(){
+  const c=document.getElementById('code-inp').value.trim().toUpperCase();
+  if(c.length<4){showToast('⚠️ Codice non valido');return;}
+  groupId=c;buildPicker();show('s-name');setTimeout(()=>document.getElementById('name-inp').focus(),80);
+}
+function confirmName(){
+  const n=document.getElementById('name-inp').value.trim();
+  if(!n){showToast('⚠️ Inserisci il tuo nome');return;}
+  myName=n;myColor=selColor;myId=uid();enterGroup();
+}
+function enterGroup(){
+  show('s-radar');
+  document.getElementById('cbdg').textContent=groupId;
+  document.getElementById('gnm').textContent='Gruppo '+groupId;
+  setTimeout(fixCanvas,50);
+  connectMQTT();startGps();
+  requestCompassPermission();
 
-    if(!selectedFriend||myLat===null)return;
+}
 
-    const bearing=getBearing(
-        myLat,
-        myLon,
-        selectedFriend.lat,
-        selectedFriend.lon
+// ══════════════════════════════════
+// CANVAS
+// ══════════════════════════════════
+const cv=document.getElementById('cv');
+const ctx=cv.getContext('2d');
+let sweepAngle=0;
+function fixCanvas(){
+  const w=document.getElementById('radar-wrap');
+  cv.width=w.offsetWidth;cv.height=w.offsetHeight;
+}
+window.addEventListener('resize',fixCanvas);
+
+// ══════════════════════════════════
+// DRAW
+// ══════════════════════════════════
+function draw(){
+  const W=cv.width,H=cv.height;
+  if(!W||!H){fixCanvas();return;}
+  const cx=W/2,cy=H/2,R=Math.min(W,H)/2-14;
+  ctx.clearRect(0,0,W,H);
+  const bg=ctx.createRadialGradient(cx,cy,0,cx,cy,R);
+  bg.addColorStop(0,'#071d2a');bg.addColorStop(0.7,'#040e16');bg.addColorStop(1,'#020409');
+  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fillStyle=bg;ctx.fill();
+  // Sweep
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(sweepAngle);
+  for(let i=0;i<8;i++){
+    ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,-Math.PI/2-0.9+i*0.11,-Math.PI/2-0.9+(i+1)*0.11);ctx.closePath();
+    ctx.fillStyle=`rgba(0,200,100,${0.01+i*0.012})`;ctx.fill();
+  }
+  ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,-Math.PI/2-0.2,-Math.PI/2+0.2);ctx.closePath();
+  const cg=ctx.createLinearGradient(0,-R,0,0);cg.addColorStop(0,'rgba(0,232,122,0.30)');cg.addColorStop(1,'rgba(0,232,122,0.02)');
+  ctx.fillStyle=cg;ctx.fill();
+  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-R);ctx.strokeStyle='#00e87a';ctx.lineWidth=2;ctx.stroke();
+  ctx.restore();
+  // Cerchi
+  [1/3,2/3,1].forEach(f=>{
+    ctx.beginPath();ctx.arc(cx,cy,R*f,0,Math.PI*2);ctx.strokeStyle='#1a3a4a';ctx.lineWidth=1;ctx.stroke();
+    ctx.fillStyle='#3a7a8a';ctx.font='10px sans-serif';ctx.textAlign='center';ctx.fillText(Math.round(MAX_R*f)+'m',cx,cy-R*f+13);
+  });
+  // Linee cardinali
+  ctx.strokeStyle='#1a3a4a99';ctx.lineWidth=0.8;
+  [[0,-1],[0,1],[1,0],[-1,0]].forEach(([dx,dy])=>{ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx*R,cy+dy*R);ctx.stroke();});
+  ctx.setLineDash([2,5]);
+  [[1,-1],[1,1],[-1,1],[-1,-1]].forEach(([dx,dy])=>{ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx*R*0.707,cy+dy*R*0.707);ctx.stroke();});
+  ctx.setLineDash([]);
+  // Dot amici (dentro clip)
+  const now=Date.now();
+  const flist=Object.values(friends).filter(f=>f.lat!==null&&myLat!==null);
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,R-1,0,Math.PI*2);ctx.clip();
+  flist.forEach(f=>{
+    const sp=smoothFriendPos[f.id]||{lat:f.lat,lon:f.lon};const pr=(sp.lat!==null&&sp.lat!==undefined)?sp:{lat:f.lat,lon:f.lon};const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
+    const r=R*Math.min(dist/MAX_R,0.96);
+    const ar=d2r(bearing)-Math.PI/2;
+    const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
+    const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>90000?col+'88':col; // stale=90s, mantieni colore ma semitrasparente
+    ctx.save();ctx.setLineDash([3,6]);
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);ctx.strokeStyle=fc+'55';ctx.lineWidth=1;ctx.stroke();ctx.restore();
+    const isSOS=sosActiveId&&f.id===sosActiveId;
+    const blink=isSOS&&(Date.now()%600<300);
+    const dotColor=isSOS?'#ff3344':fc;
+    const dotR=isSOS?9:8; // dot più grande
+    if(!blink){
+      // Cerchio pieno col colore dell'amico
+      ctx.beginPath();ctx.arc(fx,fy,dotR,0,Math.PI*2);
+      ctx.fillStyle=dotColor;ctx.shadowColor=dotColor;ctx.shadowBlur=isSOS?24:16;ctx.fill();ctx.shadowBlur=0;
+      // Iniziale del nome al centro del dot
+      const initial=(f.name||'?')[0].toUpperCase();
+      ctx.font=`bold ${isSOS?10:9}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillStyle='rgba(0,0,0,0.85)';ctx.fillText(initial,fx,fy);
+      ctx.textBaseline='alphabetic';ctx.textAlign='left';
+    }
+    if(isSOS){
+      const pulse=((Date.now()%1000)/1000);
+      ctx.beginPath();ctx.arc(fx,fy,13+pulse*10,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(255,51,68,${0.7-pulse*0.7})`;ctx.lineWidth=2;ctx.stroke();
+    }
+    // Anello esterno col colore dell'amico
+    ctx.beginPath();ctx.arc(fx,fy,isSOS?15:12,0,Math.PI*2);
+    ctx.strokeStyle=isSOS?'#ff334488':fc+'66';ctx.lineWidth=2;ctx.stroke();
+    if(f.id===selectedFriendId){
+      ctx.beginPath();ctx.arc(fx,fy,18,0,Math.PI*2);
+      ctx.strokeStyle='#ffffff99';ctx.lineWidth=1.5;
+      ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);
+    }
+  });
+  ctx.restore();
+  // Label amici (fuori clip)
+  flist.forEach(f=>{
+    const sp=smoothFriendPos[f.id]||{lat:f.lat,lon:f.lon};const pr=(sp.lat!==null&&sp.lat!==undefined)?sp:{lat:f.lat,lon:f.lon};const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
+    const r=R*Math.min(dist/MAX_R,0.96);
+    const ar=d2r(bearing)-Math.PI/2;
+    const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
+    const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>90000?col+'88':col; // stale=90s, mantieni colore ma semitrasparente
+    const nm=f.name||'?',ds=Math.round(dist)+'m';
+    ctx.font='bold 11px sans-serif';
+    const tw=Math.max(ctx.measureText(nm).width,ctx.measureText(ds).width)+10;
+    const th=28,lx=fx<cx?fx-tw-6:fx+14,ly=fy-10;
+    ctx.fillStyle='rgba(2,4,14,0.82)';ctx.fillRect(lx-2,ly,tw+2,th);
+    ctx.fillStyle='#ffffffee';ctx.font='bold 11px sans-serif';ctx.textAlign='left';ctx.fillText(nm,lx,ly+13);
+    ctx.fillStyle=fc;ctx.font='10px sans-serif';ctx.fillText(ds,lx,ly+25);
+  });
+  // IO
+  ctx.beginPath();ctx.arc(cx,cy,7,0,Math.PI*2);ctx.fillStyle=myColor;ctx.shadowColor=myColor;ctx.shadowBlur=18;ctx.fill();ctx.shadowBlur=0;
+  ctx.beginPath();ctx.arc(cx,cy,13,0,Math.PI*2);ctx.strokeStyle=myColor+'55';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.fillStyle='#ffffffcc';ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText(myName||'Io',cx,cy-18);ctx.textAlign='left';
+  // Bordo + cardinali
+  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.strokeStyle='#1a3a4a';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='#00c0ffcc';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+  ctx.fillText('N',cx,cy-R+20);ctx.fillText('S',cx,cy+R-8);
+  ctx.textAlign='left';ctx.fillText('O',cx-R+8,cy+5);ctx.textAlign='right';ctx.fillText('E',cx+R-8,cy+5);
+  ctx.textAlign='left';
+
+  // ── Freccia orientamento: mostra dove sei rivolto sul bordo del radar ──
+  const fRad=d2r(compassHeading); // angolo rispetto al Nord (0=Nord, 90=Est)
+  const fX=cx+(R+2)*Math.sin(fRad);
+  const fY=cy-(R+2)*Math.cos(fRad);
+  // Arco colorato sul bordo (±20°) per indicare il campo visivo
+  ctx.beginPath();
+  ctx.arc(cx,cy,R,fRad-Math.PI/2-0.35,fRad-Math.PI/2+0.35);
+  ctx.strokeStyle=(selectedFriendId&&friends[selectedFriendId]?
+    (friends[selectedFriendId].color||'#00c0ff')+'99':'rgba(255,160,40,0.6)');
+  ctx.lineWidth=4;ctx.stroke();
+  // Triangolo freccia sul bordo
+  ctx.save();
+  ctx.translate(fX,fY);
+  ctx.rotate(fRad);
+  ctx.beginPath();
+  ctx.moveTo(0,-10);   // punta verso l'esterno
+  ctx.lineTo(-6,4);
+  ctx.lineTo(6,4);
+  ctx.closePath();
+  const _ac=(selectedFriendId&&friends[selectedFriendId])?(friends[selectedFriendId].color||'#00c0ff'):'#ffa040';
+  const _al=(selectedFriendId&&friends[selectedFriendId])?(friends[selectedFriendId].name||'?').slice(0,6):'TU';
+  ctx.fillStyle=_ac;
+  ctx.shadowColor=_ac;ctx.shadowBlur=12;
+  ctx.fill();ctx.shadowBlur=0;
+  ctx.restore();
+  // Label amico o TU
+  const lblOff=22;
+  const lblX=cx+(R+lblOff)*Math.sin(fRad);
+  const lblY=cy-(R+lblOff)*Math.cos(fRad);
+  ctx.fillStyle=_ac;ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+  ctx.fillText(_al,lblX,lblY+3);
+  ctx.textAlign='left';
+}
+
+// ══════════════════════════════════
+// LOOP
+// ══════════════════════════════════
+let prevT=0;
+function loop(t){
+  const dt=Math.min((t-prevT)/1000,0.1);prevT=t;
+  sweepAngle+=dt*1.2;
+  // Se amico selezionato, la bussola punta verso di lui
+  if(selectedFriendId&&friends[selectedFriendId]){
+    const _sf=friends[selectedFriendId];
+    const _sp=(smoothFriendPos[selectedFriendId]&&smoothFriendPos[selectedFriendId].lat!=null)
+      ?smoothFriendPos[selectedFriendId]:(_sf.lat!=null?{lat:_sf.lat,lon:_sf.lon}:null);
+    if(_sp&&myLat!=null) rawHeading=distBear(myLat,myLon,_sp.lat,_sp.lon).bearing;
+  }
+  compassHeading=lerpAngle(compassHeading,rawHeading,0.12);
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ── Tap amico sul radar → bussola punta verso di lui ──
+cv.addEventListener('click',function(e){
+  const rect=cv.getBoundingClientRect();
+  const mx=(e.clientX-rect.left)*(cv.width/rect.width);
+  const my=(e.clientY-rect.top)*(cv.height/rect.height);
+  const cx=cv.width/2,cy=cv.height/2,R=Math.min(cv.width,cv.height)/2-14;
+  let hit=null;
+  Object.values(friends).forEach(f=>{
+    if(f.lat==null||myLat==null)return;
+    const sp=(smoothFriendPos[f.id]&&smoothFriendPos[f.id].lat!=null)
+      ?smoothFriendPos[f.id]:{lat:f.lat,lon:f.lon};
+    const{dist,bearing}=distBear(myLat,myLon,sp.lat,sp.lon);
+    const r=R*Math.min(dist/MAXR,0.96);
+    const ar=d2r(bearing)-Math.PI/2;
+    if(Math.hypot(mx-(cx+r*Math.cos(ar)),my-(cy+r*Math.sin(ar)))<24)hit=f.id;
+  });
+  selectedFriendId=(hit&&hit!==selectedFriendId)?hit:null;
+  // Quando si deseleziona, rawHeading torna al device orientation
+  // (onOrient() continua ad aggiornarlo automaticamente)
+});
+
+
+// ══════════════════════════════════
+// GPS + BUSSOLA
+// ══════════════════════════════════
+function startGps(){
+  if(!navigator.geolocation){showToast('⚠️ GPS non supportato');return;}
+  const dot=document.getElementById('gdot'),lbl=document.getElementById('glbl');
+  dot.className='gdot wait';lbl.textContent='GPS...';
+  gpsWatch=navigator.geolocation.watchPosition(pos=>{
+    const lat=pos.coords.latitude,lon=pos.coords.longitude,acc=Math.round(pos.coords.accuracy);
+    gpsTs=Date.now();dot.className='gdot ok';lbl.textContent='GPS ±'+acc+'m';
+    if(myLat!==null){
+      const d=distBear(myLat,myLon,lat,lon).dist;
+      if(d<2){if(!stTimer)stTimer=setTimeout(()=>{navigator.geolocation.clearWatch(gpsWatch);dot.className='gdot old';lbl.textContent='GPS fermo';},60000);}
+      else{clearTimeout(stTimer);stTimer=null;}
+    }
+    myLat=lat;myLon=lon;myAcc=acc;publishPos();
+  },()=>{document.getElementById('gdot').className='gdot';document.getElementById('glbl').textContent='GPS off';},
+  {enableHighAccuracy:true,maximumAge:5000,timeout:20000});
+}
+function onOrient(e){
+  let h=null;
+  if(e.webkitCompassHeading!=null){
+    // iOS: heading diretto, 0=Nord, crescente in senso orario ✓
+    h=e.webkitCompassHeading;
+  } else if(e.absolute && e.alpha!=null){
+    // Android deviceorientationabsolute: alpha cresce in senso ANTIORARIO
+    // quindi l'heading reale = (360 - alpha) % 360
+    h=(360-e.alpha)%360;
+  }
+  if(h!=null) rawHeading=h;
+}
+
+async function requestCompassPermission(){
+  // iOS 13+ richiede permesso esplicito per i sensori di movimento
+  if(typeof DeviceOrientationEvent!=='undefined' &&
+     typeof DeviceOrientationEvent.requestPermission==='function'){
+    try{
+      const state=await DeviceOrientationEvent.requestPermission();
+      if(state==='granted'){
+        window.addEventListener('deviceorientationabsolute',onOrient,true);
+        window.addEventListener('deviceorientation',onOrient,true);
+      }
+    }catch(e){}
+  } else {
+    // Android / altri: permesso non richiesto
+    window.addEventListener('deviceorientationabsolute',onOrient,true);
+    window.addEventListener('deviceorientation',onOrient,true);
+  }
+}
+
+setInterval(()=>{
+  if(!gpsTs||!myLat)return;
+  if((Date.now()-gpsTs)>30000){document.getElementById('gdot').className='gdot old';document.getElementById('glbl').textContent='GPS vecchio ±'+(myAcc||'?')+'m';}
+},5000);
+
+
+// ══════════════════════════════════
+// MQTT
+// ══════════════════════════════════
+function connectMQTT(){
+  mqttClient=mqtt.connect(BROKER,{clientId:'fc_'+myId,clean:true,reconnectPeriod:3000,keepalive:30});
+  mqttClient.on('connect',()=>{mqttClient.subscribe(`fc/${groupId}/#`);publishMember();showToast('🎉 Nel gruppo '+groupId);});
+  mqttClient.on('message',(topic,payload)=>{
+    try{
+      const pts=topic.split('/'),type=pts[2],uid2=pts[3];
+      if(uid2===myId)return;
+      const data=JSON.parse(payload.toString());
+      if(!friends[uid2])friends[uid2]={id:uid2,lat:null,lon:null,ts:0};
+      if(type==='member'){
+        if(data.online===false){delete friends[uid2];delete predMap[uid2];}
+        else Object.assign(friends[uid2],{name:data.name,color:data.color,id:uid2});
+      }else if(type==='pos'){
+        if(friends[uid2]&&friends[uid2].lat!==null)predMap[uid2]={lat:friends[uid2].lat,lon:friends[uid2].lon,ts:friends[uid2].ts||0};
+        Object.assign(friends[uid2],{lat:data.lat,lon:data.lon,ts:data.ts,acc:data.acc});
+        updateSmoothedPos(uid2,data.lat,data.lon,data.acc);
+        checkSep();
+      }else if(type==='sos'){
+        // Ricevo SOS da un amico
+        const nm=data.name||friends[uid2]?.name||'Un amico';
+        startSOSAlert(nm,uid2);
+      }else if(type==='sosack'){
+        // Ferma l'alert SOS su TUTTI i dispositivi del gruppo
+        if(sosActiveId){
+          stopSOSAlert();
+          showToast('✅ '+data.name+' ha risposto al SOS');
+        }
+        // Solo chi ha inviato il SOS riceve la notifica speciale
+        if(data.target===myId){
+          addNotification('✅ '+data.name+' ha confermato il tuo SOS',new Date());
+        }
+      }
+      updateUI();
+    }catch(e){}
+  });
+  mqttClient.on('offline',()=>showToast('⚠️ Connessione persa…'));
+}
+function publishMember(){if(!mqttClient)return;mqttClient.publish(`fc/${groupId}/member/${myId}`,JSON.stringify({name:myName,color:myColor,online:true}),{retain:true,qos:1});}
+function publishPos(){if(!mqttClient||myLat===null)return;mqttClient.publish(`fc/${groupId}/pos/${myId}`,JSON.stringify({lat:myLat,lon:myLon,ts:Date.now(),acc:myAcc}),{retain:true,qos:0});}
+function removeMQTT(){if(!mqttClient)return;const e=new Uint8Array(0);mqttClient.publish(`fc/${groupId}/member/${myId}`,e,{retain:true,qos:1});mqttClient.publish(`fc/${groupId}/pos/${myId}`,e,{retain:true,qos:1});mqttClient.end();}
+
+// ══════════════════════════════════
+// SOS
+// ══════════════════════════════════
+function triggerSOS(){
+  if(!confirm('🚨 Inviare SOS a tutti gli amici del gruppo?\n\nUsare solo in caso di emergenza reale.'))return;
+  if(!mqttClient){showToast('⚠️ Non connesso');return;}
+  mqttClient.publish(`fc/${groupId}/sos/${myId}`,JSON.stringify({name:myName,ts:Date.now()}),{retain:false,qos:1});
+  document.getElementById('sosB').classList.add('active');
+  document.getElementById('sosB').textContent='🆘 SOS inviato';
+  showToast('🚨 SOS inviato a tutti!');
+  setTimeout(()=>{document.getElementById('sosB').classList.remove('active');document.getElementById('sosB').textContent='🆘 SOS';},10000);
+}
+
+function startSOSAlert(senderName,senderId){
+  sosFromId=senderId||null;
+  sosActiveId=senderId||null;
+  // Salva ultima posizione nota del mittente
+  sosFromPos=null;
+  if(senderId&&friends[senderId]&&friends[senderId].lat!==null){
+    sosFromPos={lat:friends[senderId].lat,lon:friends[senderId].lon,ts:friends[senderId].ts};
+  }
+  // Mostra overlay
+  document.getElementById('sos-from').textContent='Da: '+senderName;
+  document.getElementById('sos-banner').style.display='flex';
+  sosCountdown=SOS_DURATION;
+  updateSOSCountdown();
+  // Countdown ogni secondo
+  clearInterval(sosCdInterval);
+  sosCdInterval=setInterval(()=>{
+    sosCountdown--;
+    updateSOSCountdown();
+    if(sosCountdown<=0){clearInterval(sosCdInterval);autoStopSOS(senderName);}
+  },1000);
+  // Vibrazione continua
+  if(navigator.vibrate){
+    navigator.vibrate([600,200,600,200,600]);
+    sosVibInterval=setInterval(()=>navigator.vibrate([600,200,600,200,600]),2500);
+  }
+  // Audio — Web Audio API (nessun file esterno)
+  try{
+    sosAudioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    function beep(){
+      if(!sosAudioCtx)return;
+      const o=sosAudioCtx.createOscillator();
+      const g=sosAudioCtx.createGain();
+      o.connect(g);g.connect(sosAudioCtx.destination);
+      o.type='square';o.frequency.value=880;
+      g.gain.setValueAtTime(0.6,sosAudioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001,sosAudioCtx.currentTime+0.4);
+      o.start(sosAudioCtx.currentTime);o.stop(sosAudioCtx.currentTime+0.4);
+    }
+    beep();
+    sosAudioInterval=setInterval(beep,700);
+  }catch(e){}
+}
+function updateSOSCountdown(){
+  const m=Math.floor(sosCountdown/60),s=sosCountdown%60;
+  document.getElementById('sos-cd').textContent=m+':'+(s<10?'0':'')+s;
+}
+function stopSOSAlert(){
+  document.getElementById('sos-banner').style.display='none';
+  clearInterval(sosVibInterval);clearInterval(sosAudioInterval);clearInterval(sosCdInterval);
+  if(navigator.vibrate)navigator.vibrate(0);
+  if(sosAudioCtx){sosAudioCtx.close();sosAudioCtx=null;}
+  // Invia ACK al mittente del SOS (se fermato manualmente da qualcun altro)
+  if(sosFromId&&mqttClient&&myId){
+    mqttClient.publish(
+      `fc/${groupId}/sosack/${myId}`,
+      JSON.stringify({name:myName,target:sosFromId,ts:Date.now()}),
+      {retain:false,qos:1}
     );
+  }
+  sosFromId=null;sosFromPos=null;sosActiveId=null;
+}
+function autoStopSOS(senderName){
+  // Costruisci stringa posizione prima di resettare sosFromPos
+  const posStr=buildPosString();
+  stopSOSAlert();
+  addNotification('🚨 SOS da '+senderName+(posStr?' · '+posStr:''),new Date());
+}
+function manualStopSOS(){
+  const posStr=buildPosString();
+  const nm=document.getElementById('sos-from').textContent.replace('Da: ','');
+  stopSOSAlert();
+  if(posStr) addNotification('🚨 SOS da '+nm+' · '+posStr,new Date());
+  else addNotification('🚨 SOS da '+nm,new Date());
+}
+function buildPosString(){
+  if(!sosFromPos||!sosFromPos.lat)return null;
+  // Se ho la mia posizione calcolo distanza/direzione
+  if(myLat!==null){
+    const{dist,bearing}=distBear(myLat,myLon,sosFromPos.lat,sosFromPos.lon);
+    const age=Math.round((Date.now()-(sosFromPos.ts||0))/1000);
+    return cardinal(bearing)+' · '+Math.round(dist)+'m'+(age>30?' ('+age+'s fa)':'');
+  }
+  // Altrimenti coordinate grezze
+  return sosFromPos.lat.toFixed(5)+', '+sosFromPos.lon.toFixed(5);
+}
+function addNotification(msg,date){
+  notifications.unshift({msg,time:fmtTime(date)});
+  renderNotifications();
+  const badge=document.getElementById('notif-badge');
+  badge.textContent=notifications.length;
+  badge.classList.add('show');
+}
+function renderNotifications(){
+  const el=document.getElementById('notif-list');
+  if(!notifications.length){el.innerHTML='<div class="notif-empty">Nessuna notifica</div>';return;}
+  el.innerHTML=notifications.map(n=>`<div class="notif-item"><div class="ni-title">${n.msg}</div><div class="ni-time">${n.time}</div></div>`).join('');
+}
+function clearNotifs(){
+  notifications=[];renderNotifications();
+  document.getElementById('notif-badge').classList.remove('show');
+}
+function toggleNotifPanel(){
+  const p=document.getElementById('notif-panel');
+  p.classList.toggle('show');
+  if(p.classList.contains('show')){
+    document.getElementById('notif-badge').classList.remove('show');
+  }
+}
+// Chiudi panel cliccando fuori
+document.addEventListener('click',e=>{
+  const p=document.getElementById('notif-panel');
+  if(p.classList.contains('show')&&!p.contains(e.target)&&!document.getElementById('bell-btn').contains(e.target))
+    p.classList.remove('show');
+});
 
-    const rotation=bearing-heading;
-
-    document.getElementById("needle").style.transform=
-        `rotate(${rotation}deg)`;
+// ══════════════════════════════════
+// SEPARAZIONE
+// ══════════════════════════════════
+function checkSep(){
+  if(myLat===null)return;
+  let w=false;Object.values(friends).forEach(f=>{if(f.lat&&distBear(myLat,myLon,f.lat,f.lon).dist>SEP_THR)w=true;});
+  document.getElementById('warn').classList.toggle('show',w);
+  if(w&&navigator.vibrate)navigator.vibrate([200,100,200]);
 }
 
-navigator.geolocation.watchPosition(pos=>{
-    myLat=pos.coords.latitude;
-    myLon=pos.coords.longitude;
-    update();
-});
+// ══════════════════════════════════
+// UI
+// ══════════════════════════════════
+function updateUI(){
+  const cnt=Object.keys(friends).length;
+  document.getElementById('mct').textContent=(cnt+1)+' memb.';
+  document.getElementById('lcnt').textContent='Lista ('+cnt+')';
+  renderLista();
+}
+function switchTab(t){
+  const r=t==='r';
+  document.getElementById('radar-wrap').style.display=r?'block':'none';
+  document.getElementById('lista').style.display=r?'none':'block';
+  document.getElementById('tab-r').classList.toggle('active',r);
+  document.getElementById('tab-l').classList.toggle('active',!r);
+  if(r)setTimeout(fixCanvas,30);
+}
+function renderLista(){
+  const el=document.getElementById('lista'),list=Object.values(friends);
+  if(!list.length){el.innerHTML=`<div style="color:var(--dim);text-align:center;margin-top:60px;font-size:13px;line-height:2">Nessun amico.<br>Codice: <b style="color:var(--cyan)">${groupId}</b></div>`;return;}
+  el.innerHTML=list.map(f=>{
+    const col=f.color||'#00c0ff',pr=predictPos(f);
+    const db2=(f.lat&&myLat)?distBear(myLat,myLon,f.lat,f.lon):null; // distanza da GPS grezzo
+    const ds=db2?Math.round(db2.dist)+'m':'—',dr=db2?cardinal(db2.bearing):'—';
+    return `<div class="fr"><div class="av" style="border-color:${col};color:${col};background:${hex2rgba(col,.15)}">${(f.name||'?')[0].toUpperCase()}</div><div class="fi"><div class="fn">${f.name||'Amico'}</div><div class="fs">${dr} · <span style="color:${(Date.now()-(f.ts||0))>90000?'var(--orange)':'var(--green)'}">GPS</span></div></div><div class="fd" style="color:${col}">${ds}</div></div>`;
+  }).join('');
+}
 
-window.addEventListener("deviceorientationabsolute",e=>{
-    heading=e.alpha||0;
-    update();
-});
+// ══════════════════════════════════
+// SHARE
+// ══════════════════════════════════
+function getUrl(){const o=location.origin;if(!o||o==='null'||o.startsWith('file'))return null;return o+location.pathname+'?group='+groupId;}
+function shareWA(){const url=getUrl();const msg=url?'🧭 *Friend Compass*\nUnisciti al gruppo *'+groupId+'*!\n\n'+url:'🧭 *Friend Compass*\nCodice: *'+groupId+'*';if(navigator.share&&url)navigator.share({title:'Friend Compass',url}).catch(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'));else window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');}
+function copyLink(){const url=getUrl();if(!url){showToast('⚠️ Serve HTTPS');return;}navigator.clipboard?.writeText(url);showToast('🔗 Link copiato!');}
+function copyCode(){navigator.clipboard?.writeText(groupId);showToast('📋 Codice: '+groupId);}
+function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsWatch)navigator.geolocation.clearWatch(gpsWatch);removeMQTT();friends={};predMap={};smoothFriendPos={};show('s-landing');groupId=null;}
 
+// ══════════════════════════════════
+// TOAST
+// ══════════════════════════════════
+let tT;
+function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),2800);}
+
+// ══════════════════════════════════
+// AUTO-JOIN
+// ══════════════════════════════════
+window.addEventListener('DOMContentLoaded',()=>{
+  const c=new URLSearchParams(location.search).get('group');
+  if(c){groupId=c.toUpperCase();document.getElementById('code-inp').value=groupId;buildPicker();show('s-name');showToast('🔗 Codice: '+groupId);}
+});
 </script>
-
 </body>
 </html>
