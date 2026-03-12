@@ -395,8 +395,21 @@ function draw(){
     const ar=d2r(bearing-compassHeading)-Math.PI/2;
     const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
     const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>90000?col+'88':col; // stale=90s, mantieni colore ma semitrasparente
-    ctx.save();ctx.setLineDash([3,6]);
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);ctx.strokeStyle=fc+'55';ctx.lineWidth=1;ctx.stroke();ctx.restore();
+    // Linea tratteggiata → verde continua se direzione perfetta (±15°)
+    const _angleDiff = Math.abs(((bearing - compassHeading) % 360 + 540) % 360 - 180);
+    const _onTarget = _angleDiff < 15;
+    ctx.save();
+    if (_onTarget) {
+      ctx.setLineDash([]);
+      ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);
+      ctx.strokeStyle='#00e87a';ctx.lineWidth=2;
+      ctx.shadowColor='#00e87a';ctx.shadowBlur=8;
+      ctx.stroke();ctx.shadowBlur=0;
+    } else {
+      ctx.setLineDash([3,6]);
+      ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);ctx.strokeStyle=fc+'55';ctx.lineWidth=1;ctx.stroke();
+    }
+    ctx.restore();
     const isSOS=sosActiveId&&f.id===sosActiveId;
     const blink=isSOS&&(Date.now()%600<300);
     const dotColor=isSOS?'#ff3344':fc;
