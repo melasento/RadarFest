@@ -229,7 +229,7 @@ let notifications=[];
 let sosTimer=null,sosAudioCtx=null,sosVibInterval=null,sosAudioInterval=null,sosCountdown=SOS_DURATION;
 let sosFromId=null,sosFromPos=null,sosCdInterval=null,sosActiveId=null;
 let rawHeading=0,compassHeading=0; // solo per la freccia nord, non per il radar
-let selectedFriendId=null; // ID amico puntato dalla bussola, null = bussola device
+let selectedFriendId=null;
 let smoothFriendPos={}; // posizioni smussate per eliminare jitter GPS
 
 // ══════════════════════════════════
@@ -413,8 +413,8 @@ function draw(){
     // Anello esterno col colore dell'amico
     ctx.beginPath();ctx.arc(fx,fy,isSOS?15:12,0,Math.PI*2);
     ctx.strokeStyle=isSOS?'#ff334488':fc+'66';ctx.lineWidth=2;ctx.stroke();
-    // Anello tratteggiato se amico selezionato dalla bussola
-    if (f.id===selectedFriendId) {
+    // Anello tratteggiato se selezionato
+    if(f.id===selectedFriendId){
       ctx.beginPath();ctx.arc(fx,fy,18,0,Math.PI*2);
       ctx.strokeStyle='#ffffff88';ctx.lineWidth=1.5;
       ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);
@@ -447,27 +447,26 @@ function draw(){
   ctx.textAlign='left';ctx.fillText('O',cx-R+8,cy+5);ctx.textAlign='right';ctx.fillText('E',cx+R-8,cy+5);
   ctx.textAlign='left';
 
-  // ── Freccia: punta verso amico selezionato o verso dove sei rivolto (bussola device) ──
+  // ── Freccia: punta verso amico selezionato oppure verso dove sei rivolto ──
   let _arrowDeg, _arrowColor, _arrowLabel;
-  const _selF = selectedFriendId && friends[selectedFriendId];
-  const _selPos = _selF && (
-    (smoothFriendPos[selectedFriendId] && smoothFriendPos[selectedFriendId].lat != null)
-      ? smoothFriendPos[selectedFriendId]
-      : (_selF.lat != null ? {lat:_selF.lat, lon:_selF.lon} : null)
-  );
-  if (_selPos && myLat != null) {
-    const {bearing:_b} = distBear(myLat, myLon, _selPos.lat, _selPos.lon);
-    _arrowDeg   = _b;
-    _arrowColor = friends[selectedFriendId].color || '#00c0ff';
-    _arrowLabel = (friends[selectedFriendId].name || '?').slice(0,6);
+  const _selF  = selectedFriendId ? friends[selectedFriendId] : null;
+  const _selSP = _selF
+    ? ((smoothFriendPos[selectedFriendId]&&smoothFriendPos[selectedFriendId].lat!=null)
+        ? smoothFriendPos[selectedFriendId]
+        : (_selF.lat!=null ? {lat:_selF.lat,lon:_selF.lon} : null))
+    : null;
+  if (_selSP && myLat!=null) {
+    _arrowDeg   = distBear(myLat,myLon,_selSP.lat,_selSP.lon).bearing;
+    _arrowColor = _selF.color || '#00c0ff';
+    _arrowLabel = (_selF.name||'?').slice(0,6);
   } else {
     _arrowDeg   = compassHeading;
     _arrowColor = '#ffa040';
     _arrowLabel = 'TU';
   }
-  const fRad = d2r(_arrowDeg);
-  const fX = cx+(R+2)*Math.sin(fRad);
-  const fY = cy-(R+2)*Math.cos(fRad);
+  const fRad=d2r(_arrowDeg);
+  const fX=cx+(R+2)*Math.sin(fRad);
+  const fY=cy-(R+2)*Math.cos(fRad);
   // Arco colorato sul bordo
   ctx.beginPath();
   ctx.arc(cx,cy,R,fRad-Math.PI/2-0.35,fRad-Math.PI/2+0.35);
@@ -507,25 +506,25 @@ function loop(t){
 }
 requestAnimationFrame(loop);
 
-// ── Click su amico nel radar: seleziona/deseleziona per puntare la bussola ──
-cv.addEventListener('click', function(e) {
+// ── Tap su amico nel radar: seleziona/deseleziona bussola verso di lui ──
+cv.addEventListener('click',function(e){
   const rect=cv.getBoundingClientRect();
-  const scaleX=cv.width/rect.width, scaleY=cv.height/rect.height;
-  const mx=(e.clientX-rect.left)*scaleX, my=(e.clientY-rect.top)*scaleY;
-  const W=cv.width,H=cv.height,cx=W/2,cy=H/2;
-  const R=Math.min(W,H)/2-14;
+  const mx=(e.clientX-rect.left)*(cv.width/rect.width);
+  const my=(e.clientY-rect.top)*(cv.height/rect.height);
+  const cx=cv.width/2,cy=cv.height/2,R=Math.min(cv.width,cv.height)/2-14;
   let hit=null;
   Object.values(friends).forEach(f=>{
-    if(f.lat==null||myLat==null) return;
-    const sp=(smoothFriendPos[f.id]&&smoothFriendPos[f.id].lat!=null)?smoothFriendPos[f.id]:{lat:f.lat,lon:f.lon};
-    const {dist,bearing}=distBear(myLat,myLon,sp.lat,sp.lon);
-    const r=R*Math.min(dist/MAXR,0.96);
-    const ar=d2r(bearing)-Math.PI/2;
-    const fx=cx+r*Math.cos(ar), fy=cy+r*Math.sin(ar);
-    if(Math.hypot(mx-fx,my-fy)<24) hit=f.id;
+    if(f.lat==null||myLat==null)return;
+    const sp=(smoothFriendPos[f.id]&&smoothFriendPos[f.id].lat!=null)
+      ?smoothFriendPos[f.id]:{lat:f.lat,lon:f.lon};
+    const{dist:_d2,bearing:_br}=distBear(myLat,myLon,sp.lat,sp.lon);
+    const r=R*Math.min(_d2/MAXR,0.96);
+    const ar=d2r(_br)-Math.PI/2;
+    if(Math.hypot(mx-(cx+r*Math.cos(ar)),my-(cy+r*Math.sin(ar)))<24)hit=f.id;
   });
   selectedFriendId=(hit&&hit!==selectedFriendId)?hit:null;
 });
+
 
 // ══════════════════════════════════
 // GPS + BUSSOLA
