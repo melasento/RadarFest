@@ -229,7 +229,7 @@ let notifications=[];
 let sosTimer=null,sosAudioCtx=null,sosVibInterval=null,sosAudioInterval=null,sosCountdown=SOS_DURATION;
 let sosFromId=null,sosFromPos=null,sosCdInterval=null,sosActiveId=null;
 let rawHeading=0,compassHeading=0; // solo per la freccia nord, non per il radar
-let selectedFriendId=null; // amico selezionato: bussola punta verso di lui
+let selectedFriendId=null;
 let smoothFriendPos={}; // posizioni smussate per eliminare jitter GPS
 
 // ══════════════════════════════════
@@ -446,37 +446,44 @@ function draw(){
   ctx.textAlign='left';ctx.fillText('O',cx-R+8,cy+5);ctx.textAlign='right';ctx.fillText('E',cx+R-8,cy+5);
   ctx.textAlign='left';
 
-  // ── Freccia orientamento: mostra dove sei rivolto sul bordo del radar ──
-  const fRad=d2r(compassHeading); // angolo rispetto al Nord (0=Nord, 90=Est)
+  // ── Freccia: amico selezionato → punta verso di lui | altrimenti bussola device ──
+  let _fDeg=compassHeading, _fColor='#ffa040', _fLabel='TU';
+  if(selectedFriendId){
+    const _sf=friends[selectedFriendId];
+    if(_sf){
+      const _sp=(smoothFriendPos[selectedFriendId]&&smoothFriendPos[selectedFriendId].lat!=null)
+        ? smoothFriendPos[selectedFriendId]
+        : (_sf.lat!=null ? {lat:_sf.lat,lon:_sf.lon} : null);
+      if(_sp&&myLat!=null){
+        _fDeg=distBear(myLat,myLon,_sp.lat,_sp.lon).bearing; // bearing geografico → freccia
+        _fColor=_sf.color||'#00c0ff';
+        _fLabel=(_sf.name||'?').slice(0,8);
+      }
+    }
+  }
+  const fRad=d2r(_fDeg);
   const fX=cx+(R+2)*Math.sin(fRad);
   const fY=cy-(R+2)*Math.cos(fRad);
-  // Arco colorato sul bordo (±20°) per indicare il campo visivo
   ctx.beginPath();
   ctx.arc(cx,cy,R,fRad-Math.PI/2-0.35,fRad-Math.PI/2+0.35);
-  ctx.strokeStyle=(selectedFriendId&&friends[selectedFriendId]?
-    (friends[selectedFriendId].color||'#00c0ff')+'99':'rgba(255,160,40,0.6)');
-  ctx.lineWidth=4;ctx.stroke();
-  // Triangolo freccia sul bordo
+  ctx.strokeStyle=_fColor+'99';ctx.lineWidth=4;ctx.stroke();
   ctx.save();
   ctx.translate(fX,fY);
   ctx.rotate(fRad);
   ctx.beginPath();
-  ctx.moveTo(0,-10);   // punta verso l'esterno
+  ctx.moveTo(0,-10);
   ctx.lineTo(-6,4);
   ctx.lineTo(6,4);
   ctx.closePath();
-  const _ac=(selectedFriendId&&friends[selectedFriendId])?(friends[selectedFriendId].color||'#00c0ff'):'#ffa040';
-  const _al=(selectedFriendId&&friends[selectedFriendId])?(friends[selectedFriendId].name||'?').slice(0,6):'TU';
-  ctx.fillStyle=_ac;
-  ctx.shadowColor=_ac;ctx.shadowBlur=12;
+  ctx.fillStyle=_fColor;
+  ctx.shadowColor=_fColor;ctx.shadowBlur=12;
   ctx.fill();ctx.shadowBlur=0;
   ctx.restore();
-  // Label amico o TU
   const lblOff=22;
   const lblX=cx+(R+lblOff)*Math.sin(fRad);
   const lblY=cy-(R+lblOff)*Math.cos(fRad);
-  ctx.fillStyle=_ac;ctx.font='bold 10px sans-serif';ctx.textAlign='center';
-  ctx.fillText(_al,lblX,lblY+3);
+  ctx.fillStyle=_fColor;ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+  ctx.fillText(_fLabel,lblX,lblY+3);
   ctx.textAlign='left';
 }
 
@@ -487,20 +494,13 @@ let prevT=0;
 function loop(t){
   const dt=Math.min((t-prevT)/1000,0.1);prevT=t;
   sweepAngle+=dt*1.2;
-  // Se amico selezionato, la bussola punta verso di lui
-  if(selectedFriendId&&friends[selectedFriendId]){
-    const _sf=friends[selectedFriendId];
-    const _sp=(smoothFriendPos[selectedFriendId]&&smoothFriendPos[selectedFriendId].lat!=null)
-      ?smoothFriendPos[selectedFriendId]:(_sf.lat!=null?{lat:_sf.lat,lon:_sf.lon}:null);
-    if(_sp&&myLat!=null) rawHeading=distBear(myLat,myLon,_sp.lat,_sp.lon).bearing;
-  }
-  compassHeading=lerpAngle(compassHeading,rawHeading,0.12);
+  compassHeading=lerpAngle(compassHeading,rawHeading,0.06);
   draw();
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 
-// ── Tap amico sul radar → bussola punta verso di lui ──
+// ── Tap amico → bussola punta verso di lui (tap di nuovo = deseleziona) ──
 cv.addEventListener('click',function(e){
   const rect=cv.getBoundingClientRect();
   const mx=(e.clientX-rect.left)*(cv.width/rect.width);
@@ -517,8 +517,7 @@ cv.addEventListener('click',function(e){
     if(Math.hypot(mx-(cx+r*Math.cos(ar)),my-(cy+r*Math.sin(ar)))<24)hit=f.id;
   });
   selectedFriendId=(hit&&hit!==selectedFriendId)?hit:null;
-  // Quando si deseleziona, rawHeading torna al device orientation
-  // (onOrient() continua ad aggiornarlo automaticamente)
+  // Se deselezionato, rawHeading torna ad essere aggiornato da onOrient
 });
 
 
@@ -542,13 +541,11 @@ function startGps(){
   {enableHighAccuracy:true,maximumAge:5000,timeout:20000});
 }
 function onOrient(e){
+  if(selectedFriendId) return; // bussola occupata dall'amico selezionato
   let h=null;
   if(e.webkitCompassHeading!=null){
-    // iOS: heading diretto, 0=Nord, crescente in senso orario ✓
     h=e.webkitCompassHeading;
   } else if(e.absolute && e.alpha!=null){
-    // Android deviceorientationabsolute: alpha cresce in senso ANTIORARIO
-    // quindi l'heading reale = (360 - alpha) % 360
     h=(360-e.alpha)%360;
   }
   if(h!=null) rawHeading=h;
