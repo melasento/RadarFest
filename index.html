@@ -376,12 +376,12 @@ function draw(){
   // Linee cardinali
   ctx.strokeStyle='#1a3a4a99';ctx.lineWidth=0.8;
   ;[0,90,180,270].forEach(deg=>{
-    const a=d2r*(deg-compassHeading)-Math.PI/2;
+    const a=d2r(deg-compassHeading)-Math.PI/2;
     ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a)*R,cy+Math.sin(a)*R);ctx.stroke();
   });
   ctx.setLineDash([2,5]);
   ;[45,135,225,315].forEach(deg=>{
-    const a=d2r*(deg-compassHeading)-Math.PI/2;
+    const a=d2r(deg-compassHeading)-Math.PI/2;
     ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a)*R*0.707,cy+Math.sin(a)*R*0.707);ctx.stroke();
   });
   ctx.setLineDash([]);
@@ -392,7 +392,7 @@ function draw(){
   flist.forEach(f=>{
     const sp=smoothFriendPos[f.id]||{lat:f.lat,lon:f.lon};const pr=(sp.lat!==null&&sp.lat!==undefined)?sp:{lat:f.lat,lon:f.lon};const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
     const r=R*Math.min(dist/MAX_R,0.96);
-    const ar=d2r(bearing)-Math.PI/2;
+    const ar=d2r(bearing-compassHeading)-Math.PI/2;
     const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
     const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>90000?col+'88':col; // stale=90s, mantieni colore ma semitrasparente
     ctx.save();ctx.setLineDash([3,6]);
@@ -431,7 +431,7 @@ function draw(){
   flist.forEach(f=>{
     const sp=smoothFriendPos[f.id]||{lat:f.lat,lon:f.lon};const pr=(sp.lat!==null&&sp.lat!==undefined)?sp:{lat:f.lat,lon:f.lon};const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
     const r=R*Math.min(dist/MAX_R,0.96);
-    const ar=d2r(bearing)-Math.PI/2;
+    const ar=d2r(bearing-compassHeading)-Math.PI/2;
     const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
     const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>90000?col+'88':col; // stale=90s, mantieni colore ma semitrasparente
     const nm=f.name||'?',ds=Math.round(dist)+'m';
@@ -450,7 +450,7 @@ function draw(){
   ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.strokeStyle='#1a3a4a';ctx.lineWidth=2;ctx.stroke();
   ctx.fillStyle='#00c0ffcc';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
   ;[['N',0],['E',90],['S',180],['O',270]].forEach(([lbl,deg])=>{
-    const a=d2r*(deg-compassHeading)-Math.PI/2;
+    const a=d2r(deg-compassHeading)-Math.PI/2;
     ctx.textAlign='center';
     ctx.fillText(lbl, cx+(R-16)*Math.cos(a), cy+(R-16)*Math.sin(a)+4);
   });
@@ -510,7 +510,7 @@ let prevT=0;
 function loop(t){
   const dt=Math.min((t-prevT)/1000,0.1);prevT=t;
   sweepAngle+=dt*1.2;
-  compassHeading=lerpAngle(compassHeading,rawHeading,0.06);
+  compassHeading=lerpAngle(compassHeading,rawHeading,Math.min(1,dt*15));
   draw();
   requestAnimationFrame(loop);
 }
@@ -529,7 +529,7 @@ cv.addEventListener('click', function(e) {
     const sp=(smoothFriendPos[f.id]&&smoothFriendPos[f.id].lat!=null)?smoothFriendPos[f.id]:{lat:f.lat,lon:f.lon};
     const {dist,bearing}=distBear(myLat,myLon,sp.lat,sp.lon);
     const r=R*Math.min(dist/MAXR,0.96);
-    const ar=d2r(bearing)-Math.PI/2;
+    const ar=d2r(bearing-compassHeading)-Math.PI/2;
     const fx=cx+r*Math.cos(ar), fy=cy+r*Math.sin(ar);
     if(Math.hypot(mx-fx,my-fy)<24) hit=f.id;
   });
