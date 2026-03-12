@@ -215,7 +215,7 @@ body{display:flex;flex-direction:column}
 // ══════════════════════════════════
 const BROKER='wss://broker.emqx.io:8084/mqtt';
 const COLORS=['#00e87a','#00c0ff','#ff6b6b','#ffa040','#c084fc','#facc15','#f472b6','#38bdf8','#4ade80','#fb923c'];
-const SEP_THR=200,MAX_R=500;
+const SEP_THR=200,MAX_R=200;
 const SOS_DURATION=120; // secondi
 
 // ══════════════════════════════════
@@ -369,7 +369,7 @@ function draw(){
   ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-R);ctx.strokeStyle='#00e87a';ctx.lineWidth=2;ctx.stroke();
   ctx.restore();
   // Cerchi
-  [1/3,2/3,1].forEach(f=>{
+  [25/200,100/200,1].forEach(f=>{
     ctx.beginPath();ctx.arc(cx,cy,R*f,0,Math.PI*2);ctx.strokeStyle='#1a3a4a';ctx.lineWidth=1;ctx.stroke();
     ctx.fillStyle='#3a7a8a';ctx.font='10px sans-serif';ctx.textAlign='center';ctx.fillText(Math.round(MAX_R*f)+'m',cx,cy-R*f+13);
   });
@@ -528,7 +528,7 @@ cv.addEventListener('click', function(e) {
     if(f.lat==null||myLat==null) return;
     const sp=(smoothFriendPos[f.id]&&smoothFriendPos[f.id].lat!=null)?smoothFriendPos[f.id]:{lat:f.lat,lon:f.lon};
     const {dist,bearing}=distBear(myLat,myLon,sp.lat,sp.lon);
-    const r=R*Math.min(dist/MAXR,0.96);
+    const r=R*Math.min(dist/MAX_R,0.96);
     const ar=d2r(bearing-compassHeading)-Math.PI/2;
     const fx=cx+r*Math.cos(ar), fy=cy+r*Math.sin(ar);
     if(Math.hypot(mx-fx,my-fy)<24) hit=f.id;
