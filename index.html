@@ -116,7 +116,8 @@ body{display:flex;flex-direction:column}
        transition:opacity .3s;z-index:999;max-width:94vw;text-align:center}
 #toast.show{opacity:1}
 #warn{position:fixed;top:46px;left:0;right:0;background:#cc220099;backdrop-filter:blur(4px);
-      color:#fff;padding:7px;text-align:center;font-size:12px;font-weight:700;display:none;z-index:997}
+      color:#fff;padding:7px 12px;font-size:12px;font-weight:700;display:none;z-index:997;
+      align-items:center;justify-content:center;gap:4px}
 #warn.show{display:block}
 </style>
 </head>
@@ -207,7 +208,7 @@ body{display:flex;flex-direction:column}
 
 
 
-<div id="warn">⚠️ Un amico si è allontanato oltre 2km!</div>
+<div id="warn"><span>⚠️ Un amico si è allontanato oltre 2km!</span><button onclick="dismissWarn()" style="background:transparent;border:1px solid #fff8;color:#fff;border-radius:6px;padding:2px 10px;font-size:12px;font-weight:700;cursor:pointer;margin-left:12px;font-family:inherit">✕</button></div>
 <div id="toast"></div>
 
 <script>
@@ -782,11 +783,30 @@ document.addEventListener('click',e=>{
 // ══════════════════════════════════
 // SEPARAZIONE
 // ══════════════════════════════════
+let warnDismissed=false;
+function dismissWarn(){warnDismissed=true;document.getElementById('warn').classList.remove('show');}
+const sepNotified={};  // tiene traccia di chi ha già ricevuto notifica
 function checkSep(){
   if(myLat===null)return;
-  let w=false;Object.values(friends).forEach(f=>{if(f.lat&&distBear(myLat,myLon,f.lat,f.lon).dist>SEP_THR)w=true;});
-  document.getElementById('warn').classList.toggle('show',w);
-  if(w&&navigator.vibrate)navigator.vibrate([200,100,200]);
+  let w=false;
+  Object.values(friends).forEach(f=>{
+    if(!f.lat)return;
+    const {dist,bearing}=distBear(myLat,myLon,f.lat,f.lon);
+    if(dist>SEP_THR){
+      w=true;
+      if(!sepNotified[f.id]){
+        sepNotified[f.id]=true;
+        const dir=cardinal(bearing);
+        const km=(dist/1000).toFixed(1);
+        addNotification(`📍 ${f.name||'Amico'} si è allontanato — ${km}km a ${dir}`,new Date());
+      }
+    } else {
+      sepNotified[f.id]=false;  // reset: potrà notificare di nuovo se si riallontana
+    }
+  });
+  if(!w) warnDismissed=false;
+  if(!warnDismissed) document.getElementById('warn').classList.toggle('show',w);
+  if(w&&!warnDismissed&&navigator.vibrate)navigator.vibrate([200,100,200]);
 }
 
 // ══════════════════════════════════
