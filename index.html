@@ -375,9 +375,15 @@ function draw(){
   });
   // Linee cardinali
   ctx.strokeStyle='#1a3a4a99';ctx.lineWidth=0.8;
-  [[0,-1],[0,1],[1,0],[-1,0]].forEach(([dx,dy])=>{ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx*R,cy+dy*R);ctx.stroke();});
+  ;[0,90,180,270].forEach(deg=>{
+    const a=d2r*(deg-compassHeading)-Math.PI/2;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a)*R,cy+Math.sin(a)*R);ctx.stroke();
+  });
   ctx.setLineDash([2,5]);
-  [[1,-1],[1,1],[-1,1],[-1,-1]].forEach(([dx,dy])=>{ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx*R*0.707,cy+dy*R*0.707);ctx.stroke();});
+  ;[45,135,225,315].forEach(deg=>{
+    const a=d2r*(deg-compassHeading)-Math.PI/2;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a)*R*0.707,cy+Math.sin(a)*R*0.707);ctx.stroke();
+  });
   ctx.setLineDash([]);
   // Dot amici (dentro clip)
   const now=Date.now();
@@ -443,8 +449,11 @@ function draw(){
   // Bordo + cardinali
   ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.strokeStyle='#1a3a4a';ctx.lineWidth=2;ctx.stroke();
   ctx.fillStyle='#00c0ffcc';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
-  ctx.fillText('N',cx,cy-R+20);ctx.fillText('S',cx,cy+R-8);
-  ctx.textAlign='left';ctx.fillText('O',cx-R+8,cy+5);ctx.textAlign='right';ctx.fillText('E',cx+R-8,cy+5);
+  ;[['N',0],['E',90],['S',180],['O',270]].forEach(([lbl,deg])=>{
+    const a=d2r*(deg-compassHeading)-Math.PI/2;
+    ctx.textAlign='center';
+    ctx.fillText(lbl, cx+(R-16)*Math.cos(a), cy+(R-16)*Math.sin(a)+4);
+  });
   ctx.textAlign='left';
 
   // ── Freccia: punta verso amico selezionato o verso dove sei rivolto (bussola device) ──
@@ -457,11 +466,11 @@ function draw(){
   );
   if (_selPos && myLat != null) {
     const {bearing:_b} = distBear(myLat, myLon, _selPos.lat, _selPos.lon);
-    _arrowDeg   = _b;
+    _arrowDeg   = _b - compassHeading;
     _arrowColor = friends[selectedFriendId].color || '#00c0ff';
     _arrowLabel = (friends[selectedFriendId].name || '?').slice(0,6);
   } else {
-    _arrowDeg   = compassHeading;
+    _arrowDeg   = 0;
     _arrowColor = '#ffa040';
     _arrowLabel = 'TU';
   }
