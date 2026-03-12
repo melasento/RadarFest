@@ -2,14 +2,14 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <title>Friend Compass</title>
 <script src="https://unpkg.com/mqtt@5/dist/mqtt.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{--bg:#050813;--bg2:#07111f;--bg3:#040c18;--green:#00e87a;--cyan:#00c0ff;
       --orange:#ffa040;--red:#ff3344;--ring:#1a3a4a;--text:#e0eef5;--dim:#4a7a99}
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Segoe UI',Roboto,sans-serif;overflow:hidden}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Segoe UI',Roboto,sans-serif;overflow:hidden;touch-action:manipulation}
 body{display:flex;flex-direction:column}
 .screen{display:none;flex-direction:column;flex:1;overflow:hidden}
 .screen.active{display:flex}
@@ -228,6 +228,7 @@ let myLat=null,myLon=null,myAcc=null,gpsTs=0;
 let groupName='';
 let lastPubLat=null,lastPubLon=null;  // rate limiting publish
 let gpsMoving=true;  // GPS adattivo
+let _gpsRestarting=false;  // debounce startWatch
 let friends={},predMap={};
 let gpsWatch=null,stTimer=null,mqttClient=null;
 let notifications=[];
@@ -347,7 +348,11 @@ const ctx=cv.getContext('2d');
 let sweepAngle=0;
 function fixCanvas(){
   const w=document.getElementById('radar-wrap');
-  cv.width=w.offsetWidth;cv.height=w.offsetHeight;
+  const dpr=window.devicePixelRatio||1;
+  const W=w.offsetWidth, H=w.offsetHeight;
+  cv.width=W*dpr; cv.height=H*dpr;
+  cv.style.width=W+'px'; cv.style.height=H+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 window.addEventListener('resize',fixCanvas);
 
@@ -532,7 +537,8 @@ let lastInteract=Date.now();
 function loop(t){
   const dt=Math.min((t-prevT)/1000,0.1);prevT=t;
   const idle=Date.now()-lastInteract>10000;  // idle dopo 10s
-  if(idle&&(t%33)>16.5){requestAnimationFrame(loop);return;}  // ~30fps se idle
+  if(idle){if(loop._skip){loop._skip=false;requestAnimationFrame(loop);return;}loop._skip=true;}
+  else{loop._skip=false;}
   sweepAngle+=dt*1.2;
   compassHeading=lerpAngle(compassHeading,rawHeading,Math.min(1,dt*15));
   draw();
@@ -585,11 +591,11 @@ function startGps(){
             dot.className='gdot old';lbl.textContent='GPS fermo';
           },60000);
           // Se già fermo e gpsMoving, passa a modalità risparmio
-          if(gpsMoving&&stTimer)startWatch(false);
+          if(gpsMoving&&stTimer&&!_gpsRestarting){_gpsRestarting=true;setTimeout(()=>{_gpsRestarting=false;startWatch(false);},500);}
         } else {
           clearTimeout(stTimer);stTimer=null;
           // Era fermo, ora si muove: torna ad alta frequenza
-          if(!gpsMoving)startWatch(true);
+          if(!gpsMoving&&!_gpsRestarting){_gpsRestarting=true;setTimeout(()=>{_gpsRestarting=false;startWatch(true);},500);}
         }
       }
       myLat=lat;myLon=lon;myAcc=acc;publishPos();
@@ -597,14 +603,19 @@ function startGps(){
   }
   startWatch(true);
 }
+let _hasAbsolute=false;  // flag: ricevuto almeno un evento absolute
 function onOrient(e){
   let h=null;
   if(e.webkitCompassHeading!=null){
-    // iOS: heading diretto, 0=Nord, crescente in senso orario ✓
+    // iOS: heading diretto ✓
     h=e.webkitCompassHeading;
-  } else if(e.absolute && e.alpha!=null){
-    // Android deviceorientationabsolute: alpha cresce in senso ANTIORARIO
-    // quindi l'heading reale = (360 - alpha) % 360
+  } else if(e.absolute===true && e.alpha!=null){
+    // Android deviceorientationabsolute: alpha antiorario → heading = 360-alpha
+    _hasAbsolute=true;
+    h=(360-e.alpha)%360;
+  } else if(!e.absolute && e.alpha!=null && !_hasAbsolute){
+    // Android fallback: deviceorientation (relativo al boot) — solo se non abbiamo absolute
+    // Non è riferito al Nord, ma meglio di niente per la rotazione relativa
     h=(360-e.alpha)%360;
   }
   if(h!=null) rawHeading=h;
@@ -622,9 +633,12 @@ async function requestCompassPermission(){
       }
     }catch(e){}
   } else {
-    // Android / altri: permesso non richiesto
+    // Android / altri: prova absolute (riferito al Nord), fallback a plain
     window.addEventListener('deviceorientationabsolute',onOrient,true);
-    window.addEventListener('deviceorientation',onOrient,true);
+    // fallback dopo 1s se nessun evento absolute arriva
+    setTimeout(()=>{
+      if(!_hasAbsolute) window.addEventListener('deviceorientation',onOrient,true);
+    },1000);
   }
 }
 
