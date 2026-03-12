@@ -228,8 +228,8 @@ let gpsWatch=null,stTimer=null,mqttClient=null;
 let notifications=[];
 let sosTimer=null,sosAudioCtx=null,sosVibInterval=null,sosAudioInterval=null,sosCountdown=SOS_DURATION;
 let sosFromId=null,sosFromPos=null,sosCdInterval=null,sosActiveId=null;
-let rawHeading=0,compassHeading=0; // solo per la freccia nord, non per il radar
-let selectedFriendId=null; // ID amico puntato dalla bussola, null = bussola device
+let rawHeading=0,compassHeading=0;
+let selectedFriendId=null;
 let smoothFriendPos={}; // posizioni smussate per eliminare jitter GPS
 
 // ══════════════════════════════════
@@ -413,10 +413,9 @@ function draw(){
     // Anello esterno col colore dell'amico
     ctx.beginPath();ctx.arc(fx,fy,isSOS?15:12,0,Math.PI*2);
     ctx.strokeStyle=isSOS?'#ff334488':fc+'66';ctx.lineWidth=2;ctx.stroke();
-    // Anello tratteggiato se amico selezionato dalla bussola
-    if (f.id===selectedFriendId) {
+    if(f.id===selectedFriendId){
       ctx.beginPath();ctx.arc(fx,fy,18,0,Math.PI*2);
-      ctx.strokeStyle='#ffffff88';ctx.lineWidth=1.5;
+      ctx.strokeStyle='#ffffff99';ctx.lineWidth=1.5;
       ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);
     }
   });
@@ -447,31 +446,22 @@ function draw(){
   ctx.textAlign='left';ctx.fillText('O',cx-R+8,cy+5);ctx.textAlign='right';ctx.fillText('E',cx+R-8,cy+5);
   ctx.textAlign='left';
 
-  // ── Freccia: punta verso amico selezionato o verso dove sei rivolto (bussola device) ──
-  let _arrowDeg, _arrowColor, _arrowLabel;
-  const _selF = selectedFriendId && friends[selectedFriendId];
-  const _selPos = _selF && (
-    (smoothFriendPos[selectedFriendId] && smoothFriendPos[selectedFriendId].lat != null)
-      ? smoothFriendPos[selectedFriendId]
-      : (_selF.lat != null ? {lat:_selF.lat, lon:_selF.lon} : null)
-  );
-  if (_selPos && myLat != null) {
-    const {bearing:_b} = distBear(myLat, myLon, _selPos.lat, _selPos.lon);
-    _arrowDeg   = _b;
-    _arrowColor = friends[selectedFriendId].color || '#00c0ff';
-    _arrowLabel = (friends[selectedFriendId].name || '?').slice(0,6);
-  } else {
-    _arrowDeg   = compassHeading;
-    _arrowColor = '#ffa040';
-    _arrowLabel = 'TU';
+  // ── Freccia: punta verso amico selezionato OPPURE bussola device ──
+  // Calcola bearing target direttamente — nessuna dipendenza da rawHeading
+  let _fDeg=compassHeading, _fColor='#ffa040', _fLabel='TU';
+  const _sf=selectedFriendId?friends[selectedFriendId]:null;
+  if(_sf && _sf.lat!=null && myLat!=null){
+    _fDeg   = distBear(myLat,myLon,_sf.lat,_sf.lon).bearing;
+    _fColor = _sf.color||'#00c0ff';
+    _fLabel = (_sf.name||'?').slice(0,8);
   }
-  const fRad = d2r(_arrowDeg);
-  const fX = cx+(R+2)*Math.sin(fRad);
-  const fY = cy-(R+2)*Math.cos(fRad);
+  const fRad=d2r(_fDeg);
+  const fX=cx+(R+2)*Math.sin(fRad);
+  const fY=cy-(R+2)*Math.cos(fRad);
   // Arco colorato sul bordo
   ctx.beginPath();
   ctx.arc(cx,cy,R,fRad-Math.PI/2-0.35,fRad-Math.PI/2+0.35);
-  ctx.strokeStyle=_arrowColor+'99';ctx.lineWidth=4;ctx.stroke();
+  ctx.strokeStyle=_fColor+'99';ctx.lineWidth=4;ctx.stroke();
   // Triangolo freccia
   ctx.save();
   ctx.translate(fX,fY);
@@ -481,16 +471,16 @@ function draw(){
   ctx.lineTo(-6,4);
   ctx.lineTo(6,4);
   ctx.closePath();
-  ctx.fillStyle=_arrowColor;
-  ctx.shadowColor=_arrowColor;ctx.shadowBlur=12;
+  ctx.fillStyle=_fColor;
+  ctx.shadowColor=_fColor;ctx.shadowBlur=12;
   ctx.fill();ctx.shadowBlur=0;
   ctx.restore();
-  // Label
+  // Label (nome amico o "TU")
   const lblOff=22;
   const lblX=cx+(R+lblOff)*Math.sin(fRad);
   const lblY=cy-(R+lblOff)*Math.cos(fRad);
-  ctx.fillStyle=_arrowColor;ctx.font='bold 10px sans-serif';ctx.textAlign='center';
-  ctx.fillText(_arrowLabel,lblX,lblY+3);
+  ctx.fillStyle=_fColor;ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+  ctx.fillText(_fLabel,lblX,lblY+3);
   ctx.textAlign='left';
 }
 
@@ -507,25 +497,23 @@ function loop(t){
 }
 requestAnimationFrame(loop);
 
-// ── Click su amico nel radar: seleziona/deseleziona per puntare la bussola ──
-cv.addEventListener('click', function(e) {
+// Tap sul radar per selezionare amico
+cv.addEventListener('click',function(e){
   const rect=cv.getBoundingClientRect();
-  const scaleX=cv.width/rect.width, scaleY=cv.height/rect.height;
-  const mx=(e.clientX-rect.left)*scaleX, my=(e.clientY-rect.top)*scaleY;
-  const W=cv.width,H=cv.height,cx=W/2,cy=H/2;
-  const R=Math.min(W,H)/2-14;
+  const mx=(e.clientX-rect.left)*(cv.width/rect.width);
+  const my=(e.clientY-rect.top)*(cv.height/rect.height);
+  const cx=cv.width/2,cy=cv.height/2,R=Math.min(cv.width,cv.height)/2-14;
   let hit=null;
   Object.values(friends).forEach(f=>{
-    if(f.lat==null||myLat==null) return;
-    const sp=(smoothFriendPos[f.id]&&smoothFriendPos[f.id].lat!=null)?smoothFriendPos[f.id]:{lat:f.lat,lon:f.lon};
-    const {dist,bearing}=distBear(myLat,myLon,sp.lat,sp.lon);
+    if(!f.lat||!myLat)return;
+    const{dist,bearing}=distBear(myLat,myLon,f.lat,f.lon);
     const r=R*Math.min(dist/MAXR,0.96);
     const ar=d2r(bearing)-Math.PI/2;
-    const fx=cx+r*Math.cos(ar), fy=cy+r*Math.sin(ar);
-    if(Math.hypot(mx-fx,my-fy)<24) hit=f.id;
+    if(Math.hypot(mx-(cx+r*Math.cos(ar)),my-(cy+r*Math.sin(ar)))<28)hit=f.id;
   });
-  selectedFriendId=(hit&&hit!==selectedFriendId)?hit:null;
+  if(hit!==null)selectedFriendId=(hit===selectedFriendId)?null:hit;
 });
+
 
 // ══════════════════════════════════
 // GPS + BUSSOLA
@@ -547,6 +535,7 @@ function startGps(){
   {enableHighAccuracy:true,maximumAge:5000,timeout:20000});
 }
 function onOrient(e){
+  if(selectedFriendId)return;
   let h=null;
   if(e.webkitCompassHeading!=null){
     // iOS: heading diretto, 0=Nord, crescente in senso orario ✓
@@ -782,20 +771,29 @@ function switchTab(t){
   document.getElementById('tab-l').classList.toggle('active',!r);
   if(r)setTimeout(fixCanvas,30);
 }
+function selectFriend(id){
+  selectedFriendId=(selectedFriendId===id)?null:id;
+  switchTab('r'); // torna al radar
+}
 function renderLista(){
   const el=document.getElementById('lista'),list=Object.values(friends);
   if(!list.length){el.innerHTML=`<div style="color:var(--dim);text-align:center;margin-top:60px;font-size:13px;line-height:2">Nessun amico.<br>Codice: <b style="color:var(--cyan)">${groupId}</b></div>`;return;}
   el.innerHTML=list.map(f=>{
     const col=f.color||'#00c0ff',pr=predictPos(f);
-    const db2=(f.lat&&myLat)?distBear(myLat,myLon,f.lat,f.lon):null; // distanza da GPS grezzo
+    const db2=(f.lat&&myLat)?distBear(myLat,myLon,f.lat,f.lon):null;
     const ds=db2?Math.round(db2.dist)+'m':'—',dr=db2?cardinal(db2.bearing):'—';
-    return `<div class="fr"><div class="av" style="border-color:${col};color:${col};background:${hex2rgba(col,.15)}">${(f.name||'?')[0].toUpperCase()}</div><div class="fi"><div class="fn">${f.name||'Amico'}</div><div class="fs">${dr} · <span style="color:${(Date.now()-(f.ts||0))>90000?'var(--orange)':'var(--green)'}">GPS</span></div></div><div class="fd" style="color:${col}">${ds}</div></div>`;
+    const isSel=(f.id===selectedFriendId);
+    return `<div class="fr" style="${isSel?'border-color:'+col+';box-shadow:0 0 8px '+col+'44':''}" onclick="selectFriend('${f.id}')">
+      <div class="av" style="border-color:${col};color:${col};background:${hex2rgba(col,.15)}">${(f.name||'?')[0].toUpperCase()}</div>
+      <div class="fi">
+        <div class="fn">${f.name||'Amico'}</div>
+        <div class="fs">${dr} · <span style="color:${(Date.now()-(f.ts||0))>90000?'var(--orange)':'var(--green)'}">GPS</span></div>
+      </div>
+      <div class="fd" style="color:${col}">${ds}</div>
+      <div style="font-size:18px;padding-left:6px">${isSel?'🎯':'○'}</div>
+    </div>`;
   }).join('');
 }
-
-// ══════════════════════════════════
-// SHARE
-// ══════════════════════════════════
 function getUrl(){const o=location.origin;if(!o||o==='null'||o.startsWith('file'))return null;return o+location.pathname+'?group='+groupId;}
 function shareWA(){const url=getUrl();const msg=url?'🧭 *Friend Compass*\nUnisciti al gruppo *'+groupId+'*!\n\n'+url:'🧭 *Friend Compass*\nCodice: *'+groupId+'*';if(navigator.share&&url)navigator.share({title:'Friend Compass',url}).catch(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'));else window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');}
 function copyLink(){const url=getUrl();if(!url){showToast('⚠️ Serve HTTPS');return;}navigator.clipboard?.writeText(url);showToast('🔗 Link copiato!');}
