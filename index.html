@@ -118,6 +118,21 @@ body{display:flex;flex-direction:column}
 #warn{position:fixed;top:46px;left:0;right:0;background:#cc220099;backdrop-filter:blur(4px);
       color:#fff;padding:7px;text-align:center;font-size:12px;font-weight:700;display:none;z-index:997}
 #warn.show{display:block}
+
+/* ── LOCALIZER ─────────────────────────────── */
+#loc-bar{
+  position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
+  background:rgba(2,4,18,0.92);border:1.5px solid var(--ring);
+  border-radius:24px;padding:7px 14px 7px 10px;
+  display:none;align-items:center;gap:10px;z-index:20;
+  pointer-events:auto;backdrop-filter:blur(6px);white-space:nowrap;
+}
+#loc-bar.show{display:flex;}
+.lc-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;}
+.lc-name{font-size:13px;font-weight:700;}
+.lc-info{font-size:11px;color:var(--dim);}
+.lc-compass{font-size:16px;flex-shrink:0;min-width:28px;text-align:center;font-weight:700;}
+.lc-close{font-size:17px;cursor:pointer;color:var(--dim);line-height:1;padding:0 2px;}
 </style>
 </head>
 <body>
@@ -188,6 +203,14 @@ body{display:flex;flex-direction:column}
   </div>
   <div id="radar-wrap">
     <canvas id="cv"></canvas>
+    <!-- LOCALIZER BAR -->
+    <div id="loc-bar">
+      <div class="lc-dot" id="lc-dot"></div>
+      <span class="lc-name" id="lc-name">Amico</span>
+      <span class="lc-info" id="lc-info"></span>
+      <span class="lc-compass" id="lc-compass">·</span>
+      <span class="lc-close" onclick="deselectFriend()">✕</span>
+    </div>
     <!-- SOS BANNER (sul radar, non blocca) -->
     <div id="sos-banner">
       <div class="sos-banner-icon">🚨</div>
@@ -230,6 +253,7 @@ let notifications=[];
 let sosTimer=null,sosAudioCtx=null,sosVibInterval=null,sosAudioInterval=null,sosCountdown=SOS_DURATION;
 let sosFromId=null,sosFromPos=null,sosCdInterval=null,sosActiveId=null;
 let rawHeading=0,compassHeading=0,compassActive=false;
+let selectedFriendId=null;
 const headingBuf=[];  // buffer mediana bussola
 const HEADING_BUF_SIZE=12; // ultimi 12 campioni (~200ms a 60fps)
 let smoothFriendPos={}; // target GPS filtrato
@@ -367,7 +391,16 @@ cv.addEventListener('click',e=>{
   const tx=e.clientX-rect.left,ty=e.clientY-rect.top;
   const cx=cv.width/2,cy=cv.height/2;
   const dist=Math.sqrt((tx-cx)**2+(ty-cy)**2);
-  if(dist<28) forceGpsUpdate(); // raggio di tap ~28px intorno al dot Io
+  // Selezione amico
+  let hit=null;
+  Object.values(friends).forEach(f=>{
+    if(f.fx!==undefined&&f.fy!==undefined){
+      const d=Math.sqrt((tx-f.fx)**2+(ty-f.fy)**2);
+      if(d<24)hit=f;
+    }
+  });
+  if(hit){selectedFriendId===hit.id?deselectFriend():selectFriend(hit.id);return;}
+  if(dist<28) forceGpsUpdate();
 });
 cv.addEventListener('touchend',e=>{
   if(e.changedTouches.length!==1)return;
@@ -376,6 +409,15 @@ cv.addEventListener('touchend',e=>{
   const tx=t.clientX-rect.left,ty=t.clientY-rect.top;
   const cx=cv.width/2,cy=cv.height/2;
   const dist=Math.sqrt((tx-cx)**2+(ty-cy)**2);
+  // Selezione amico (touch)
+  let hit=null;
+  Object.values(friends).forEach(f=>{
+    if(f.fx!==undefined&&f.fy!==undefined){
+      const d=Math.sqrt((tx-f.fx)**2+(ty-f.fy)**2);
+      if(d<28)hit=f;
+    }
+  });
+  if(hit){selectedFriendId===hit.id?deselectFriend():selectFriend(hit.id);return;}
   if(dist<28) forceGpsUpdate();
 },{passive:true});
 
@@ -532,6 +574,71 @@ function draw(){
     ctx.fillText(Math.round(displayHeading)+'°',bx,by+br+9);
     ctx.textAlign='left';
   }
+
+  // ══ LOCALIZER ARROW ══════════════════════════════════════════════════════
+  if(selectedFriendId && friends[selectedFriendId]){
+    const sf=friends[selectedFriendId];
+    const sp=smoothFriendPos[selectedFriendId]||(sf.lat!==null?{lat:sf.lat,lon:sf.lon}:null);
+    if(sp && myLat!==null){
+      const{dist,bearing}=distBear(myLat,myLon,sp.lat,sp.lon);
+      const col=sf.color||'#00c0ff';
+      // Angolo schermo: nord-up. Se bussola attiva ruota rispetto al device
+      let ang=d2r(bearing)-Math.PI/2;
+      if(compassActive) ang=d2r(bearing-displayHeading)-Math.PI/2;
+
+      const arL=R*0.62;      // distanza centro→punta
+      const hw=18, sw=7;     // halfWidth testa e gambo
+      const notchY=-arL+42;  // base della punta
+      const tailY= arL*0.22; // base gambo
+
+      ctx.save();
+      ctx.translate(cx,cy);
+      ctx.rotate(ang);
+
+      // Alone luminoso dietro
+      const gl=ctx.createLinearGradient(0,-arL,0,tailY);
+      gl.addColorStop(0,hex2rgba(col,0.55));
+      gl.addColorStop(0.55,hex2rgba(col,0.10));
+      gl.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.beginPath();
+      ctx.moveTo(0,-arL);ctx.lineTo(-hw*1.1,notchY);ctx.lineTo(hw*1.1,notchY);
+      ctx.closePath();ctx.fillStyle=gl;ctx.fill();
+
+      // Freccia (corpo+punta)
+      ctx.beginPath();
+      ctx.moveTo(0,-arL);          // punta
+      ctx.lineTo(-hw, notchY);     // ala sinistra
+      ctx.lineTo(-sw, notchY+4);   // spalla sin
+      ctx.lineTo(-sw, tailY);      // fondo gambo sin
+      ctx.lineTo( sw, tailY);      // fondo gambo des
+      ctx.lineTo( sw, notchY+4);   // spalla des
+      ctx.lineTo( hw, notchY);     // ala destra
+      ctx.closePath();
+      ctx.fillStyle=col;
+      ctx.shadowColor=col;ctx.shadowBlur=22;
+      ctx.fill();ctx.shadowBlur=0;
+
+      // Cerchietto alla base (origine)
+      ctx.beginPath();ctx.arc(0,tailY+8,5,0,Math.PI*2);
+      ctx.fillStyle=hex2rgba(col,0.5);ctx.fill();
+
+      ctx.restore();
+
+      // Aggiorna barra info
+      const ds=dist<1000?Math.round(dist)+'m':(dist/1000).toFixed(1)+'km';
+      const dir=cardinal(bearing);
+      document.getElementById('lc-info').textContent=ds;
+      // Freccia direzionale Unicode per la barra
+      const uAngDeg=((bearing-displayHeading)%360+360)%360;
+      const arrows=['↑','↗','→','↘','↓','↙','←','↖'];
+      const ai=Math.round(uAngDeg/45)%8;
+      document.getElementById('lc-compass').textContent=
+        compassActive?arrows[ai]:dir;
+      document.getElementById('lc-compass').style.color=col;
+    }
+  }
+  // ══ fine LOCALIZER ═══════════════════════════════════════════════════════
+
 
   // Bordo radar
   ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);
@@ -941,6 +1048,24 @@ function renderLista(){
   }).join('');
 }
 
+
+// ══ LOCALIZER ════════════════════════════════════════════════════════════════
+function selectFriend(id){
+  selectedFriendId=id;
+  const f=friends[id]; if(!f)return;
+  const col=f.color||'#00c0ff';
+  document.getElementById('lc-dot').style.background=col;
+  document.getElementById('lc-name').textContent=f.name||'Amico';
+  document.getElementById('lc-name').style.color=col;
+  document.getElementById('loc-bar').classList.add('show');
+  showToast('📍 '+f.name);
+}
+function deselectFriend(){
+  selectedFriendId=null;
+  document.getElementById('loc-bar').classList.remove('show');
+}
+// ═════════════════════════════════════════════════════════════════════════════
+
 // ══════════════════════════════════
 // SHARE
 // ══════════════════════════════════
@@ -958,7 +1083,7 @@ function shareWA(){
 }
 function copyLink(){const url=getUrl();if(!url){showToast('⚠️ Serve HTTPS');return;}navigator.clipboard?.writeText(url);showToast('🔗 Link copiato!');}
 function copyCode(){navigator.clipboard?.writeText(groupId);showToast('📋 Codice: '+groupId);}
-function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsInterval)clearInterval(gpsInterval);gpsInterval=null;removeMQTT();friends={};predMap={};smoothFriendPos={};displayFriendPos={};show('s-landing');groupId=null;}
+function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsInterval)clearInterval(gpsInterval);gpsInterval=null;removeMQTT();friends={};predMap={};smoothFriendPos={};displayFriendPos={};deselectFriend?.();show('s-landing');groupId=null;}
 
 // ══════════════════════════════════
 // TOAST
