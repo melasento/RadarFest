@@ -56,9 +56,9 @@ body{display:flex;flex-direction:column}
 .notif-badge.show{display:flex}
 /* TABS */
 #tabs{display:flex;flex-shrink:0}
-.tab{flex:1;padding:8px 0;text-align:center;font-size:13px;cursor:pointer;
-     border-bottom:2px solid transparent;background:var(--bg3);color:var(--dim)}
-.tab.active{color:var(--green);border-bottom:2px solid var(--green);background:var(--bg)}
+.tab{flex:1;padding:14px 0;text-align:center;font-size:17px;font-weight:700;cursor:pointer;
+     border-bottom:3px solid transparent;background:var(--bg3);color:var(--dim)}
+.tab.active{color:var(--green);border-bottom:3px solid var(--green);background:var(--bg)}
 /* RADAR */
 #radar-wrap{flex:1;position:relative;overflow:hidden;background:#02040A}
 #cv{position:absolute;top:0;left:0;width:100%;height:100%}
@@ -116,8 +116,9 @@ body{display:flex;flex-direction:column}
        transition:opacity .3s;z-index:999;max-width:94vw;text-align:center}
 #toast.show{opacity:1}
 #warn{position:fixed;top:46px;left:0;right:0;background:#cc220099;backdrop-filter:blur(4px);
-      color:#fff;padding:7px;text-align:center;font-size:12px;font-weight:700;display:none;z-index:997}
-#warn.show{display:block}
+      color:#fff;padding:7px 12px;font-size:12px;font-weight:700;display:none;z-index:997;
+      align-items:center;justify-content:center;gap:4px}
+#warn.show{display:flex}
 </style>
 </head>
 <body>
@@ -129,8 +130,8 @@ body{display:flex;flex-direction:column}
   <div class="sub">Trova i tuoi amici in tempo reale</div>
   <div class="card">
     <div class="ct">✨ Crea un gruppo</div>
-    <input class="field" id="group-name-inp" maxlength="28" placeholder="Nome gruppo (es. Gita a Roma)"/>
-    <button class="btn btn-g" onclick="startCreate()">Crea gruppo →</button>
+    <input class="field" id="group-name-inp" maxlength="24" placeholder="Nome gruppo (es. Gita Roma)"/>
+    <button class="btn btn-g" onclick="startCreate()">Crea gruppo</button>
   </div>
   <div class="card">
     <div class="ct">🔗 Entra con codice</div>
@@ -207,7 +208,7 @@ body{display:flex;flex-direction:column}
 
 
 
-<div id="warn">⚠️ Un amico si è allontanato oltre 200m!</div>
+<div id="warn"><span>⚠️ Un amico si è allontanato oltre 2km!</span><button onclick="dismissWarn()" style="background:transparent;border:1px solid #fff8;color:#fff;border-radius:6px;padding:2px 10px;font-size:12px;font-weight:700;cursor:pointer;margin-left:12px;font-family:inherit">✕</button></div>
 <div id="toast"></div>
 
 <script>
@@ -216,7 +217,7 @@ body{display:flex;flex-direction:column}
 // ══════════════════════════════════
 const BROKER='wss://broker.emqx.io:8084/mqtt';
 const COLORS=['#00e87a','#00c0ff','#ff6b6b','#ffa040','#c084fc','#facc15','#f472b6','#38bdf8','#4ade80','#fb923c'];
-const SEP_THR=200,MAX_R=500;
+const SEP_THR=2000,MAX_R=200;
 const SOS_DURATION=120; // secondi
 
 // ══════════════════════════════════
@@ -225,6 +226,8 @@ const SOS_DURATION=120; // secondi
 let selColor=COLORS[1],myId=null,myName='',myColor=COLORS[1],groupId=null;
 let myLat=null,myLon=null,myAcc=null,gpsTs=0;
 let groupName='';
+let lastPubLat=null,lastPubLon=null;  // rate limiting publish
+let gpsMoving=true;  // GPS adattivo
 let friends={},predMap={};
 let gpsWatch=null,stTimer=null,mqttClient=null;
 let notifications=[];
@@ -371,15 +374,21 @@ function draw(){
   ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-R);ctx.strokeStyle='#00e87a';ctx.lineWidth=2;ctx.stroke();
   ctx.restore();
   // Cerchi
-  [1/3,2/3,1].forEach(f=>{
+  [25/200,100/200,1].forEach(f=>{
     ctx.beginPath();ctx.arc(cx,cy,R*f,0,Math.PI*2);ctx.strokeStyle='#1a3a4a';ctx.lineWidth=1;ctx.stroke();
     ctx.fillStyle='#3a7a8a';ctx.font='10px sans-serif';ctx.textAlign='center';ctx.fillText(Math.round(MAX_R*f)+'m',cx,cy-R*f+13);
   });
   // Linee cardinali
   ctx.strokeStyle='#1a3a4a99';ctx.lineWidth=0.8;
-  [[0,-1],[0,1],[1,0],[-1,0]].forEach(([dx,dy])=>{ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx*R,cy+dy*R);ctx.stroke();});
+  ;[0,90,180,270].forEach(deg=>{
+    const a=d2r(deg-compassHeading)-Math.PI/2;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a)*R,cy+Math.sin(a)*R);ctx.stroke();
+  });
   ctx.setLineDash([2,5]);
-  [[1,-1],[1,1],[-1,1],[-1,-1]].forEach(([dx,dy])=>{ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx*R*0.707,cy+dy*R*0.707);ctx.stroke();});
+  ;[45,135,225,315].forEach(deg=>{
+    const a=d2r(deg-compassHeading)-Math.PI/2;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a)*R*0.707,cy+Math.sin(a)*R*0.707);ctx.stroke();
+  });
   ctx.setLineDash([]);
   // Dot amici (dentro clip)
   const now=Date.now();
@@ -388,11 +397,24 @@ function draw(){
   flist.forEach(f=>{
     const sp=smoothFriendPos[f.id]||{lat:f.lat,lon:f.lon};const pr=(sp.lat!==null&&sp.lat!==undefined)?sp:{lat:f.lat,lon:f.lon};const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
     const r=R*Math.min(dist/MAX_R,0.96);
-    const ar=d2r(bearing)-Math.PI/2;
+    const ar=d2r(bearing-compassHeading)-Math.PI/2;
     const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
     const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>90000?col+'88':col; // stale=90s, mantieni colore ma semitrasparente
-    ctx.save();ctx.setLineDash([3,6]);
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);ctx.strokeStyle=fc+'55';ctx.lineWidth=1;ctx.stroke();ctx.restore();
+    // Linea tratteggiata → verde continua se direzione perfetta (±15°)
+    const _angleDiff = Math.abs(((bearing - compassHeading) % 360 + 540) % 360 - 180);
+    const _onTarget = _angleDiff < 15;
+    ctx.save();
+    if (_onTarget) {
+      ctx.setLineDash([]);
+      ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);
+      ctx.strokeStyle='#00e87a';ctx.lineWidth=2;
+      ctx.shadowColor='#00e87a';ctx.shadowBlur=8;
+      ctx.stroke();ctx.shadowBlur=0;
+    } else {
+      ctx.setLineDash([3,6]);
+      ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);ctx.strokeStyle=fc+'55';ctx.lineWidth=1;ctx.stroke();
+    }
+    ctx.restore();
     const isSOS=sosActiveId&&f.id===sosActiveId;
     const blink=isSOS&&(Date.now()%600<300);
     const dotColor=isSOS?'#ff3344':fc;
@@ -427,7 +449,7 @@ function draw(){
   flist.forEach(f=>{
     const sp=smoothFriendPos[f.id]||{lat:f.lat,lon:f.lon};const pr=(sp.lat!==null&&sp.lat!==undefined)?sp:{lat:f.lat,lon:f.lon};const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
     const r=R*Math.min(dist/MAX_R,0.96);
-    const ar=d2r(bearing)-Math.PI/2;
+    const ar=d2r(bearing-compassHeading)-Math.PI/2;
     const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
     const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>90000?col+'88':col; // stale=90s, mantieni colore ma semitrasparente
     const nm=f.name||'?',ds=Math.round(dist)+'m';
@@ -445,8 +467,11 @@ function draw(){
   // Bordo + cardinali
   ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.strokeStyle='#1a3a4a';ctx.lineWidth=2;ctx.stroke();
   ctx.fillStyle='#00c0ffcc';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
-  ctx.fillText('N',cx,cy-R+20);ctx.fillText('S',cx,cy+R-8);
-  ctx.textAlign='left';ctx.fillText('O',cx-R+8,cy+5);ctx.textAlign='right';ctx.fillText('E',cx+R-8,cy+5);
+  ;[['N',0],['E',90],['S',180],['O',270]].forEach(([lbl,deg])=>{
+    const a=d2r(deg-compassHeading)-Math.PI/2;
+    ctx.textAlign='center';
+    ctx.fillText(lbl, cx+(R-16)*Math.cos(a), cy+(R-16)*Math.sin(a)+4);
+  });
   ctx.textAlign='left';
 
   // ── Freccia: punta verso amico selezionato o verso dove sei rivolto (bussola device) ──
@@ -459,11 +484,11 @@ function draw(){
   );
   if (_selPos && myLat != null) {
     const {bearing:_b} = distBear(myLat, myLon, _selPos.lat, _selPos.lon);
-    _arrowDeg   = _b;
+    _arrowDeg   = _b - compassHeading;
     _arrowColor = friends[selectedFriendId].color || '#00c0ff';
     _arrowLabel = (friends[selectedFriendId].name || '?').slice(0,6);
   } else {
-    _arrowDeg   = compassHeading;
+    _arrowDeg   = 0;
     _arrowColor = '#ffa040';
     _arrowLabel = 'TU';
   }
@@ -500,10 +525,16 @@ function draw(){
 // LOOP
 // ══════════════════════════════════
 let prevT=0;
+let lastInteract=Date.now();
+['touchstart','touchmove','click','pointermove'].forEach(ev=>
+  document.addEventListener(ev,()=>lastInteract=Date.now(),{passive:true})
+);
 function loop(t){
   const dt=Math.min((t-prevT)/1000,0.1);prevT=t;
+  const idle=Date.now()-lastInteract>10000;  // idle dopo 10s
+  if(idle&&(t%33)>16.5){requestAnimationFrame(loop);return;}  // ~30fps se idle
   sweepAngle+=dt*1.2;
-  compassHeading=lerpAngle(compassHeading,rawHeading,0.06);
+  compassHeading=lerpAngle(compassHeading,rawHeading,Math.min(1,dt*15));
   draw();
   requestAnimationFrame(loop);
 }
@@ -521,8 +552,8 @@ cv.addEventListener('click', function(e) {
     if(f.lat==null||myLat==null) return;
     const sp=(smoothFriendPos[f.id]&&smoothFriendPos[f.id].lat!=null)?smoothFriendPos[f.id]:{lat:f.lat,lon:f.lon};
     const {dist,bearing}=distBear(myLat,myLon,sp.lat,sp.lon);
-    const r=R*Math.min(dist/MAXR,0.96);
-    const ar=d2r(bearing)-Math.PI/2;
+    const r=R*Math.min(dist/MAX_R,0.96);
+    const ar=d2r(bearing-compassHeading)-Math.PI/2;
     const fx=cx+r*Math.cos(ar), fy=cy+r*Math.sin(ar);
     if(Math.hypot(mx-fx,my-fy)<24) hit=f.id;
   });
@@ -536,17 +567,35 @@ function startGps(){
   if(!navigator.geolocation){showToast('⚠️ GPS non supportato');return;}
   const dot=document.getElementById('gdot'),lbl=document.getElementById('glbl');
   dot.className='gdot wait';lbl.textContent='GPS...';
-  gpsWatch=navigator.geolocation.watchPosition(pos=>{
-    const lat=pos.coords.latitude,lon=pos.coords.longitude,acc=Math.round(pos.coords.accuracy);
-    gpsTs=Date.now();dot.className='gdot ok';lbl.textContent='GPS ±'+acc+'m';
-    if(myLat!==null){
-      const d=distBear(myLat,myLon,lat,lon).dist;
-      if(d<2){if(!stTimer)stTimer=setTimeout(()=>{navigator.geolocation.clearWatch(gpsWatch);dot.className='gdot old';lbl.textContent='GPS fermo';},60000);}
-      else{clearTimeout(stTimer);stTimer=null;}
-    }
-    myLat=lat;myLon=lon;myAcc=acc;publishPos();
-  },()=>{document.getElementById('gdot').className='gdot';document.getElementById('glbl').textContent='GPS off';},
-  {enableHighAccuracy:true,maximumAge:5000,timeout:20000});
+  function startWatch(moving){
+    if(gpsWatch)navigator.geolocation.clearWatch(gpsWatch);
+    gpsMoving=moving;
+    const opts=moving
+      ?{enableHighAccuracy:true,maximumAge:5000,timeout:20000}
+      :{enableHighAccuracy:false,maximumAge:45000,timeout:60000};
+    gpsWatch=navigator.geolocation.watchPosition(pos=>{
+      const lat=pos.coords.latitude,lon=pos.coords.longitude,acc=Math.round(pos.coords.accuracy);
+      gpsTs=Date.now();dot.className='gdot ok';
+      lbl.textContent='GPS ±'+acc+'m'+(gpsMoving?'':' 💤');
+      if(myLat!==null){
+        const d=distBear(myLat,myLon,lat,lon).dist;
+        if(d<2){
+          if(!stTimer)stTimer=setTimeout(()=>{
+            navigator.geolocation.clearWatch(gpsWatch);
+            dot.className='gdot old';lbl.textContent='GPS fermo';
+          },60000);
+          // Se già fermo e gpsMoving, passa a modalità risparmio
+          if(gpsMoving&&stTimer)startWatch(false);
+        } else {
+          clearTimeout(stTimer);stTimer=null;
+          // Era fermo, ora si muove: torna ad alta frequenza
+          if(!gpsMoving)startWatch(true);
+        }
+      }
+      myLat=lat;myLon=lon;myAcc=acc;publishPos();
+    },()=>{document.getElementById('gdot').className='gdot';document.getElementById('glbl').textContent='GPS off';},opts);
+  }
+  startWatch(true);
 }
 function onOrient(e){
   let h=null;
@@ -626,7 +675,16 @@ function connectMQTT(){
   mqttClient.on('offline',()=>showToast('⚠️ Connessione persa…'));
 }
 function publishMember(){if(!mqttClient)return;const payload={name:myName,color:myColor,online:true};if(groupName)payload.groupName=groupName;mqttClient.publish(`fc/${groupId}/member/${myId}`,JSON.stringify(payload),{retain:true,qos:1});}
-function publishPos(){if(!mqttClient||myLat===null)return;mqttClient.publish(`fc/${groupId}/pos/${myId}`,JSON.stringify({lat:myLat,lon:myLon,ts:Date.now(),acc:myAcc}),{retain:true,qos:0});}
+function publishPos(){
+  if(!mqttClient||myLat===null)return;
+  // Rate limiting: pubblica solo se spostato ≥5m dall'ultimo invio
+  if(lastPubLat!==null){
+    const moved=distBear(lastPubLat,lastPubLon,myLat,myLon).dist;
+    if(moved<5)return;
+  }
+  lastPubLat=myLat;lastPubLon=myLon;
+  mqttClient.publish(`fc/${groupId}/pos/${myId}`,JSON.stringify({lat:myLat,lon:myLon,ts:Date.now(),acc:myAcc}),{retain:true,qos:0});
+}
 function removeMQTT(){if(!mqttClient)return;const e=new Uint8Array(0);mqttClient.publish(`fc/${groupId}/member/${myId}`,e,{retain:true,qos:1});mqttClient.publish(`fc/${groupId}/pos/${myId}`,e,{retain:true,qos:1});mqttClient.end();}
 
 // ══════════════════════════════════
@@ -760,11 +818,30 @@ document.addEventListener('click',e=>{
 // ══════════════════════════════════
 // SEPARAZIONE
 // ══════════════════════════════════
+let warnDismissed=false;
+function dismissWarn(){warnDismissed=true;document.getElementById('warn').classList.remove('show');}
+const sepNotified={};  // tiene traccia di chi ha già ricevuto notifica
 function checkSep(){
   if(myLat===null)return;
-  let w=false;Object.values(friends).forEach(f=>{if(f.lat&&distBear(myLat,myLon,f.lat,f.lon).dist>SEP_THR)w=true;});
-  document.getElementById('warn').classList.toggle('show',w);
-  if(w&&navigator.vibrate)navigator.vibrate([200,100,200]);
+  let w=false;
+  Object.values(friends).forEach(f=>{
+    if(!f.lat)return;
+    const {dist,bearing}=distBear(myLat,myLon,f.lat,f.lon);
+    if(dist>SEP_THR){
+      w=true;
+      if(!sepNotified[f.id]){
+        sepNotified[f.id]=true;
+        const dir=cardinal(bearing);
+        const km=(dist/1000).toFixed(1);
+        addNotification(`📍 ${f.name||'Amico'} si è allontanato — ${km}km a ${dir}`,new Date());
+      }
+    } else {
+      sepNotified[f.id]=false;  // reset: potrà notificare di nuovo se si riallontana
+    }
+  });
+  if(!w) warnDismissed=false;
+  if(!warnDismissed) document.getElementById('warn').classList.toggle('show',w);
+  if(w&&!warnDismissed&&navigator.vibrate)navigator.vibrate([200,100,200]);
 }
 
 // ══════════════════════════════════
