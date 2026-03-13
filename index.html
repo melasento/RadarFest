@@ -934,7 +934,7 @@ window.addEventListener('DOMContentLoaded',()=>{
 });
 </script>
       <script>
-  if('serviceWorker' in navigator){
+  let compassOlet _compassOk=false;window.addEventListener('deviceorientationabsolute',function(){_compassOk=true;},{once:true});window.addEventListener('deviceorientation',function(){_compassOk=true;},{once:true});setTimeout(function(){if(!_compassOk&&groupId){showToast('\ud83e\uddedBussola non rilevata: vai in Impostazioni > Posizione e attiva il sensore');}},5000);if('serviceWorker' in navigator)k=false;window.addEventListener('deviceorientationabsolute',()=>compassOk=true,{once:true});window.addEventListener('deviceorientation',()=>compassOk=true,{once:true});setTimeout(()=>{if(!compassOk&&groupId){showToast('🧭 Bussola non rilevata: attiva il sensore nelle impostazioni del telefono');}},5000);setInterval(()=>{ if(!gpsTs{
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js');
     });
