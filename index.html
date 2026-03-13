@@ -354,23 +354,34 @@ const cv=document.getElementById('cv');
 const ctx=cv.getContext('2d');
 let canvasCssW=0,canvasCssH=0;
 let bgGradCache=null,bgGradKey='';
-// lowPerf: DPR>2 o Android con DPR<=2 → niente shadowBlur, 30fps cap
 const lowPerf=/Android/i.test(navigator.userAgent)||window.devicePixelRatio>2.5;
 let sweepAngle=0;
 let prevSweepAngle=0;
 const friendPulse={};
 function fixCanvas(){
-  const w=document.getElementById('radar-wrap');
+  const wrap=document.getElementById('radar-wrap');
+  // Usa getBoundingClientRect per dimensioni precise su tutti i device
+  const rect=wrap.getBoundingClientRect();
+  const cssW=Math.floor(rect.width),cssH=Math.floor(rect.height);
+  if(cssW<10||cssH<10)return; // wrap non ancora visibile
   const dpr=Math.min(window.devicePixelRatio||1,2); // cap DPR a 2 max
-  canvasCssW=w.offsetWidth; canvasCssH=w.offsetHeight;
-  cv.style.width=canvasCssW+'px';
-  cv.style.height=canvasCssH+'px';
-  cv.width=Math.round(canvasCssW*dpr);
-  cv.height=Math.round(canvasCssH*dpr);
+  // Aggiorna solo se dimensioni cambiate (evita reset inutili del contesto)
+  if(canvasCssW===cssW&&canvasCssH===cssH)return;
+  canvasCssW=cssW; canvasCssH=cssH;
+  cv.style.width=cssW+'px';
+  cv.style.height=cssH+'px';
+  cv.width=Math.round(cssW*dpr);
+  cv.height=Math.round(cssH*dpr);
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  bgGradCache=null; // invalida cache gradient al resize
+  bgGradCache=null; // invalida cache gradient
+}
+// ResizeObserver: più affidabile di 'resize' su mobile (include tastiera virtuale, rotazione, ecc.)
+if(window.ResizeObserver){
+  new ResizeObserver(()=>{ fixCanvas(); }).observe(document.getElementById('radar-wrap'));
 }
 window.addEventListener('resize',fixCanvas);
+// Ricalcola anche dopo orientamento
+window.addEventListener('orientationchange',()=>setTimeout(fixCanvas,300));
 
 // ══════════════════════════════════
 // DRAW
@@ -472,14 +483,9 @@ function draw(){
     ctx.beginPath();ctx.arc(fx,fy,isSOS?15:12,0,Math.PI*2);
     ctx.strokeStyle=isSOS?'#ff334488':fc+'66';ctx.lineWidth=2;ctx.stroke();
   const pAge=Date.now()-(friendPulse[f.id]||0);
-  if(pAge<600){
-    const p=pAge/600;
-    ctx.beginPath();ctx.arc(fx,fy,8+p*22,0,Math.PI*2);
-    ctx.strokeStyle=hex2rgba(col,(1-p)*0.85);
-    ctx.lineWidth=2.5;
-    if(!lowPerf){ctx.shadowColor=col;ctx.shadowBlur=8*(1-p);}
-    ctx.stroke();ctx.shadowBlur=0;
-  }
+  if(pAge<600){const p=pAge/600;ctx.beginPath();ctx.arc(fx,fy,8+p*22,0,Math.PI*2);
+    ctx.strokeStyle=hex2rgba(col,(1-p)*0.85);ctx.lineWidth=2.5;
+    if(!lowPerf){ctx.shadowColor=col;ctx.shadowBlur=8*(1-p);}ctx.stroke();ctx.shadowBlur=0;}
     // Anello tratteggiato se amico selezionato dalla bussola
     if (f.id===selectedFriendId) {
       ctx.beginPath();ctx.arc(fx,fy,18,0,Math.PI*2);
@@ -575,7 +581,7 @@ let lastInteract=Date.now();
 );
 function loop(t){
   requestAnimationFrame(loop);
-  if(t-prevT<33)return; // hard cap 30fps su tutti i device
+  if(t-prevT<33)return;
   const dt=Math.min((t-prevT)/1000,0.1);prevT=t;
   sweepAngle+=dt*1.2;
   compassHeading=lerpAngle(compassHeading,rawHeading,Math.min(1,dt*15));
