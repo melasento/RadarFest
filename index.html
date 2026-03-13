@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
+      <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RadarFest">
+<meta name="theme-color" content="#00e87a">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="https://raw.githubusercontent.com/melasento/RadarFest/main/icon.png">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
 <title>Radar Fest</title>
@@ -926,6 +932,13 @@ window.addEventListener('DOMContentLoaded',()=>{
   const c=new URLSearchParams(location.search).get('group');
   if(c){groupId=c.toUpperCase();document.getElementById('code-inp').value=groupId;buildPicker();show('s-name');showToast('🔗 Codice: '+groupId);}
 });
+</script>
+      <script>
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js');
+    });
+  }
 </script>
 </body>
 </html>
