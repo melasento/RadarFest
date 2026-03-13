@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+<meta name="screen-orientation" content="portrait">
 <title>Radar Fest</title>
 <script src="https://unpkg.com/mqtt@5/dist/mqtt.min.js"></script>
 <style>
@@ -139,6 +140,7 @@ body{display:flex;flex-direction:column}
   transition:background .15s;z-index:10;
 }
 .zoom-btn:active{background:rgba(0,192,255,0.18);}
+.zoom-btn:disabled{opacity:0.3;pointer-events:none;cursor:default;}
 #zoom-out{left:14px;}
 #zoom-in{right:14px;}
 #zoom-lbl{
@@ -218,9 +220,9 @@ body{display:flex;flex-direction:column}
   </div>
   <div id="radar-wrap">
     <canvas id="cv"></canvas>
-    <button class="zoom-btn" id="zoom-out" onclick="zoomOut()">−</button>
+    <button class="zoom-btn" id="zoom-out" onclick="zoomOut()" ontouchend="event.stopPropagation()">−</button>
     <span id="zoom-lbl">200 m</span>
-    <button class="zoom-btn" id="zoom-in"  onclick="zoomIn()">+</button>
+    <button class="zoom-btn" id="zoom-in"  onclick="zoomIn()" ontouchend="event.stopPropagation()">+</button>
     <!-- SOS BANNER (sul radar, non blocca) -->
     <div id="sos-banner">
       <div class="sos-banner-icon">🚨</div>
@@ -371,7 +373,8 @@ function enterGroup(){
   setTimeout(fixCanvas,50);
   connectMQTT();startGps();
   requestCompassPermission();
-
+  // Blocca rotazione in portrait
+  try{screen.orientation.lock('portrait').catch(()=>{});}catch(e){}
 }
 
 // ══════════════════════════════════
@@ -403,12 +406,12 @@ function draw(){
   ctx.save();ctx.translate(cx,cy);ctx.rotate(sweepAngle);
   for(let i=0;i<8;i++){
     ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,-Math.PI/2-0.9+i*0.11,-Math.PI/2-0.9+(i+1)*0.11);ctx.closePath();
-    ctx.fillStyle=`rgba(0,200,100,${0.01+i*0.012})`;ctx.fill();
+    ctx.fillStyle=`rgba(0,200,100,${0.005+i*0.006})`;ctx.fill();
   }
   ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,-Math.PI/2-0.2,-Math.PI/2+0.2);ctx.closePath();
-  const cg=ctx.createLinearGradient(0,-R,0,0);cg.addColorStop(0,'rgba(0,232,122,0.30)');cg.addColorStop(1,'rgba(0,232,122,0.02)');
+  const cg=ctx.createLinearGradient(0,-R,0,0);cg.addColorStop(0,'rgba(0,232,122,0.12)');cg.addColorStop(1,'rgba(0,232,122,0.01)');
   ctx.fillStyle=cg;ctx.fill();
-  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-R);ctx.strokeStyle='#00e87a';ctx.lineWidth=2;ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-R);ctx.strokeStyle='#00e87a55';ctx.lineWidth=1;ctx.stroke();
   ctx.restore();
   // Cerchi
   [25/200,100/200,1].forEach(f=>{
@@ -590,14 +593,14 @@ function updateZoomUI(){
   if(lbl) lbl.textContent=MAX_R+' m';
   const btnIn=document.getElementById('zoom-in');
   const btnOut=document.getElementById('zoom-out');
-  if(btnIn)  btnIn.disabled=(zoomIdx<=0);
-  if(btnOut) btnOut.disabled=(zoomIdx>=ZOOM_LEVELS.length-1);
+  if(btnIn)  btnIn.disabled=(zoomIdx>=ZOOM_LEVELS.length-1);
+  if(btnOut) btnOut.disabled=(zoomIdx<=0);
 }
 function zoomIn(){
-  if(zoomIdx>0){zoomIdx--;MAX_R=ZOOM_LEVELS[zoomIdx];updateZoomUI();}
+  if(zoomIdx<ZOOM_LEVELS.length-1){zoomIdx++;MAX_R=ZOOM_LEVELS[zoomIdx];updateZoomUI();}
 }
 function zoomOut(){
-  if(zoomIdx<ZOOM_LEVELS.length-1){zoomIdx++;MAX_R=ZOOM_LEVELS[zoomIdx];updateZoomUI();}
+  if(zoomIdx>0){zoomIdx--;MAX_R=ZOOM_LEVELS[zoomIdx];updateZoomUI();}
 }
 // Doppio tap canvas → reset zoom
 let _lastTap=0;
@@ -964,7 +967,7 @@ function getUrl(){const o=location.origin;if(!o||o==='null'||o.startsWith('file'
 function shareWA(){const url=getUrl();const msg=url?'📡 *Radar Fest*\nUnisciti al gruppo *'+groupId+'*!\n\n'+url:'📡 *Radar Fest*\nCodice: *'+groupId+'*';if(navigator.share&&url)navigator.share({title:'Radar Fest',url}).catch(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'));else window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');}
 function copyLink(){const url=getUrl();if(!url){showToast('⚠️ Serve HTTPS');return;}navigator.clipboard?.writeText(url);showToast('🔗 Link copiato!');}
 function copyCode(){navigator.clipboard?.writeText(groupId);showToast('📋 Codice: '+groupId);}
-function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsWatch)navigator.geolocation.clearWatch(gpsWatch);removeMQTT();friends={};predMap={};smoothFriendPos={};show('s-landing');groupId=null;}
+function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsWatch)navigator.geolocation.clearWatch(gpsWatch);removeMQTT();friends={};predMap={};smoothFriendPos={};show('s-landing');groupId=null;try{screen.orientation.unlock();}catch(e){}}
 
 // ══════════════════════════════════
 // TOAST
