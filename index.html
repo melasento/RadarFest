@@ -357,7 +357,16 @@ let prevSweepAngle=0;
 const friendPulse={};
 function fixCanvas(){
   const w=document.getElementById('radar-wrap');
-  cv.width=w.offsetWidth;cv.height=w.offsetHeight;
+  const dpr=window.devicePixelRatio||1;
+  const cssW=w.offsetWidth, cssH=w.offsetHeight;
+  // Dimensione CSS del canvas (quello che vede il layout)
+  cv.style.width=cssW+'px';
+  cv.style.height=cssH+'px';
+  // Dimensione interna reale moltiplicata per DPR
+  cv.width=Math.round(cssW*dpr);
+  cv.height=Math.round(cssH*dpr);
+  // Scala il contesto una volta sola — draw() usa coordinate CSS normali
+  ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 window.addEventListener('resize',fixCanvas);
 
