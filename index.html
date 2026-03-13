@@ -2,19 +2,18 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
 <title>Radar Fest</title>
 <script src="https://unpkg.com/mqtt@5/dist/mqtt.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{--bg:#050813;--bg2:#07111f;--bg3:#040c18;--green:#00e87a;--cyan:#00c0ff;
       --orange:#ffa040;--red:#ff3344;--ring:#1a3a4a;--text:#e0eef5;--dim:#4a7a99}
-html,body{height:100%;min-height:100dvh;background:var(--bg);color:var(--text);font-family:'Segoe UI',Roboto,sans-serif;overflow:hidden}
-body{display:flex;flex-direction:column;height:100dvh;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Segoe UI',Roboto,sans-serif;overflow:hidden}
+body{display:flex;flex-direction:column}
 .screen{display:none;flex-direction:column;flex:1;overflow:hidden}
 #s-landing,#s-name{overflow-y:auto!important;-webkit-overflow-scrolling:touch;}
 .screen.active{display:flex}
-#s-radar{height:100%;max-height:100%;}
 /* LANDING */
 #s-landing{align-items:center;justify-content:flex-start;gap:16px;padding:max(28px,calc(env(safe-area-inset-top,0px) + 16px)) 20px calc(28px + env(safe-area-inset-bottom,0px));overflow-y:auto;-webkit-overflow-scrolling:touch}
 .logo{font-size:56px}.title{font-size:24px;font-weight:800}.sub{font-size:12px;color:var(--dim)}
@@ -34,8 +33,8 @@ body{display:flex;flex-direction:column;height:100dvh;}
 .sw{width:34px;height:34px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:transform .15s}
 .sw.sel{border-color:#fff;transform:scale(1.18)}
 /* TOPBAR */
-#topbar{display:flex;align-items:center;gap:4px;padding:6px 10px;background:var(--bg2);
-        border-bottom:1px solid var(--ring);flex-shrink:0;min-height:0;}
+#topbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--bg2);
+        border-bottom:1px solid var(--ring);flex-shrink:0}
 .gdot{width:8px;height:8px;border-radius:50%;background:#444;transition:all .4s;flex-shrink:0}
 .gdot.wait{background:#f0c000;box-shadow:0 0 6px #f0c000;animation:blink 1.2s infinite}
 .gdot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
@@ -75,7 +74,7 @@ body{display:flex;flex-direction:column;height:100dvh;}
 .fs{font-size:11px;color:var(--dim);margin-top:3px}
 .fd{font-size:18px;font-weight:700;flex-shrink:0}
 /* BOTTOMBAR */
-#bb{background:#050A14;border-top:1px solid #0a2030;padding:clamp(6px,2vw,10px) 12px;flex-shrink:0;min-height:0;}
+#bb{background:#050A14;border-top:1px solid #0a2030;padding:8px 12px;flex-shrink:0}
 /* SOS BUTTON */
 .sosB{width:100%;padding:13px 10px;border-radius:12px;border:none;font-size:17px;font-weight:900;
       cursor:pointer;background:var(--red);color:#fff;font-family:inherit;
@@ -355,32 +354,23 @@ const cv=document.getElementById('cv');
 const ctx=cv.getContext('2d');
 let canvasCssW=0,canvasCssH=0;
 let bgGradCache=null,bgGradKey='';
+// lowPerf: DPR>2 o Android con DPR<=2 → niente shadowBlur, 30fps cap
 const lowPerf=/Android/i.test(navigator.userAgent)||window.devicePixelRatio>2.5;
 let sweepAngle=0;
 let prevSweepAngle=0;
 const friendPulse={};
 function fixCanvas(){
-  const wrap=document.getElementById('radar-wrap');
-  const rect=wrap.getBoundingClientRect();
-  const cssW=Math.floor(rect.width), cssH=Math.floor(rect.height);
-  if(cssW<10||cssH<10)return;
-  // DPR cap a 2.5: nitido su A25 5G (DPR≈2.75) senza pesare come native
-  const dpr=Math.min(window.devicePixelRatio||1,2.5);
-  if(canvasCssW===cssW&&canvasCssH===cssH)return; // nessuna variazione, skip
-  canvasCssW=cssW; canvasCssH=cssH;
-  cv.style.width=cssW+'px';
-  cv.style.height=cssH+'px';
-  cv.width=Math.round(cssW*dpr);
-  cv.height=Math.round(cssH*dpr);
+  const w=document.getElementById('radar-wrap');
+  const dpr=Math.min(window.devicePixelRatio||1,2); // cap DPR a 2 max
+  canvasCssW=w.offsetWidth; canvasCssH=w.offsetHeight;
+  cv.style.width=canvasCssW+'px';
+  cv.style.height=canvasCssH+'px';
+  cv.width=Math.round(canvasCssW*dpr);
+  cv.height=Math.round(canvasCssH*dpr);
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  bgGradCache=null;
-}
-// ResizeObserver: reagisce a tastiera virtuale, rotazione, barra URL
-if(window.ResizeObserver){
-  new ResizeObserver(()=>fixCanvas()).observe(document.getElementById('radar-wrap'));
+  bgGradCache=null; // invalida cache gradient al resize
 }
 window.addEventListener('resize',fixCanvas);
-window.addEventListener('orientationchange',()=>setTimeout(fixCanvas,300));
 
 // ══════════════════════════════════
 // DRAW
@@ -482,9 +472,14 @@ function draw(){
     ctx.beginPath();ctx.arc(fx,fy,isSOS?15:12,0,Math.PI*2);
     ctx.strokeStyle=isSOS?'#ff334488':fc+'66';ctx.lineWidth=2;ctx.stroke();
   const pAge=Date.now()-(friendPulse[f.id]||0);
-  if(pAge<600){const p=pAge/600;ctx.beginPath();ctx.arc(fx,fy,8+p*22,0,Math.PI*2);
-    ctx.strokeStyle=hex2rgba(col,(1-p)*0.85);ctx.lineWidth=2.5;
-    if(!lowPerf){ctx.shadowColor=col;ctx.shadowBlur=8*(1-p);}ctx.stroke();ctx.shadowBlur=0;}
+  if(pAge<600){
+    const p=pAge/600;
+    ctx.beginPath();ctx.arc(fx,fy,8+p*22,0,Math.PI*2);
+    ctx.strokeStyle=hex2rgba(col,(1-p)*0.85);
+    ctx.lineWidth=2.5;
+    if(!lowPerf){ctx.shadowColor=col;ctx.shadowBlur=8*(1-p);}
+    ctx.stroke();ctx.shadowBlur=0;
+  }
     // Anello tratteggiato se amico selezionato dalla bussola
     if (f.id===selectedFriendId) {
       ctx.beginPath();ctx.arc(fx,fy,18,0,Math.PI*2);
@@ -580,7 +575,7 @@ let lastInteract=Date.now();
 );
 function loop(t){
   requestAnimationFrame(loop);
-  if(t-prevT<33)return;
+  if(t-prevT<33)return; // hard cap 30fps su tutti i device
   const dt=Math.min((t-prevT)/1000,0.1);prevT=t;
   sweepAngle+=dt*1.2;
   compassHeading=lerpAngle(compassHeading,rawHeading,Math.min(1,dt*15));
@@ -594,7 +589,7 @@ cv.addEventListener('click', function(e) {
   const scaleX=cv.width/rect.width, scaleY=cv.height/rect.height;
   const mx=(e.clientX-rect.left)*scaleX, my=(e.clientY-rect.top)*scaleY;
   const W=canvasCssW||cv.width,H=canvasCssH||cv.height,cx=W/2,cy=H/2;
-  const R=Math.min(W,H)/2-Math.max(10,Math.min(20,Math.min(W,H)*0.03));
+  const R=Math.min(W,H)/2-14;
   let hit=null;
   Object.values(friends).forEach(f=>{
     if(f.lat==null||myLat==null) return;
