@@ -352,26 +352,52 @@ function enterGroup(){
 // ══════════════════════════════════
 const cv=document.getElementById('cv');
 const ctx=cv.getContext('2d');
+let canvasCssW=0,canvasCssH=0;
+let bgGradCache=null,bgGradKey='';
+const lowPerf=/Android/i.test(navigator.userAgent)||window.devicePixelRatio>2.5;
 let sweepAngle=0;
 let prevSweepAngle=0;
 const friendPulse={};
 function fixCanvas(){
-  const w=document.getElementById('radar-wrap');
-  cv.width=w.offsetWidth;cv.height=w.offsetHeight;
+  const wrap=document.getElementById('radar-wrap');
+  // Usa getBoundingClientRect per dimensioni precise su tutti i device
+  const rect=wrap.getBoundingClientRect();
+  const cssW=Math.floor(rect.width),cssH=Math.floor(rect.height);
+  if(cssW<10||cssH<10)return; // wrap non ancora visibile
+  const dpr=Math.min(window.devicePixelRatio||1,2); // cap DPR a 2 max
+  // Aggiorna solo se dimensioni cambiate (evita reset inutili del contesto)
+  if(canvasCssW===cssW&&canvasCssH===cssH)return;
+  canvasCssW=cssW; canvasCssH=cssH;
+  cv.style.width=cssW+'px';
+  cv.style.height=cssH+'px';
+  cv.width=Math.round(cssW*dpr);
+  cv.height=Math.round(cssH*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  bgGradCache=null; // invalida cache gradient
+}
+// ResizeObserver: più affidabile di 'resize' su mobile (include tastiera virtuale, rotazione, ecc.)
+if(window.ResizeObserver){
+  new ResizeObserver(()=>{ fixCanvas(); }).observe(document.getElementById('radar-wrap'));
 }
 window.addEventListener('resize',fixCanvas);
+// Ricalcola anche dopo orientamento
+window.addEventListener('orientationchange',()=>setTimeout(fixCanvas,300));
 
 // ══════════════════════════════════
 // DRAW
 // ══════════════════════════════════
 function draw(){
-  const W=cv.width,H=cv.height;
+  const W=canvasCssW||cv.width,H=canvasCssH||cv.height;
   if(!W||!H){fixCanvas();return;}
   const cx=W/2,cy=H/2,R=Math.min(W,H)/2-14;
   ctx.clearRect(0,0,W,H);
-  const bg=ctx.createRadialGradient(cx,cy,0,cx,cy,R);
-  bg.addColorStop(0,'#071d2a');bg.addColorStop(0.7,'#040e16');bg.addColorStop(1,'#020409');
-  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fillStyle=bg;ctx.fill();
+  const bgKey=cx+','+cy+','+R;
+  if(!bgGradCache||bgGradKey!==bgKey){
+    bgGradCache=ctx.createRadialGradient(cx,cy,0,cx,cy,R);
+    bgGradCache.addColorStop(0,'#071d2a');bgGradCache.addColorStop(0.7,'#040e16');bgGradCache.addColorStop(1,'#020409');
+    bgGradKey=bgKey;
+  }
+  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fillStyle=bgGradCache;ctx.fill();
   // Sweep
   ctx.save();ctx.translate(cx,cy);ctx.rotate(sweepAngle);
   for(let i=0;i<8;i++){
@@ -403,17 +429,16 @@ function draw(){
   // Dot amici (dentro clip)
   const now=Date.now();
   const flist=Object.values(friends).filter(f=>f.lat!==null&&myLat!==null);
-  // Sweep pulse detection
-const SA=((sweepAngle%(Math.PI*2))+(Math.PI*2))%(Math.PI*2);
-const PSA=((prevSweepAngle%(Math.PI*2))+(Math.PI*2))%(Math.PI*2);
-flist.forEach(f=>{
-  const sp=smoothFriendPos[f.id]?.lat!=null?smoothFriendPos[f.id]:{lat:f.lat,lon:f.lon};
-  const {bearing}=distBear(myLat,myLon,sp.lat,sp.lon);
-  const trig=((d2r(bearing-compassHeading)%(Math.PI*2))+(Math.PI*2))%(Math.PI*2);
-  const crossed=PSA<=SA?(trig>=PSA&&trig<SA):(trig>=PSA||trig<SA);
-  if(crossed)friendPulse[f.id]=Date.now();
-});
-ctx.save();ctx.beginPath();ctx.arc(cx,cy,R-1,0,Math.PI*2);ctx.clip();
+  const SA=((sweepAngle%(Math.PI*2))+(Math.PI*2))%(Math.PI*2);
+  const PSA=((prevSweepAngle%(Math.PI*2))+(Math.PI*2))%(Math.PI*2);
+  flist.forEach(f=>{
+    const sp=smoothFriendPos[f.id]?.lat!=null?smoothFriendPos[f.id]:{lat:f.lat,lon:f.lon};
+    const {bearing}=distBear(myLat,myLon,sp.lat,sp.lon);
+    const trig=((d2r(bearing-compassHeading)%(Math.PI*2))+(Math.PI*2))%(Math.PI*2);
+    const crossed=PSA<=SA?(trig>=PSA&&trig<SA):(trig>=PSA||trig<SA);
+    if(crossed)friendPulse[f.id]=Date.now();
+  });
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,R-1,0,Math.PI*2);ctx.clip();
   flist.forEach(f=>{
     const sp=smoothFriendPos[f.id]||{lat:f.lat,lon:f.lon};const pr=(sp.lat!==null&&sp.lat!==undefined)?sp:{lat:f.lat,lon:f.lon};const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
     const r=R*Math.min(dist/MAX_R,0.96);
@@ -442,7 +467,7 @@ ctx.save();ctx.beginPath();ctx.arc(cx,cy,R-1,0,Math.PI*2);ctx.clip();
     if(!blink){
       // Cerchio pieno col colore dell'amico
       ctx.beginPath();ctx.arc(fx,fy,dotR,0,Math.PI*2);
-      ctx.fillStyle=dotColor;ctx.shadowColor=dotColor;ctx.shadowBlur=isSOS?24:16;ctx.fill();ctx.shadowBlur=0;
+      ctx.fillStyle=dotColor;if(!lowPerf){ctx.shadowColor=dotColor;ctx.shadowBlur=isSOS?24:16;}ctx.fill();ctx.shadowBlur=0;
       // Iniziale del nome al centro del dot
       const initial=(f.name||'?')[0].toUpperCase();
       ctx.font=`bold ${isSOS?10:9}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
@@ -457,16 +482,10 @@ ctx.save();ctx.beginPath();ctx.arc(cx,cy,R-1,0,Math.PI*2);ctx.clip();
     // Anello esterno col colore dell'amico
     ctx.beginPath();ctx.arc(fx,fy,isSOS?15:12,0,Math.PI*2);
     ctx.strokeStyle=isSOS?'#ff334488':fc+'66';ctx.lineWidth=2;ctx.stroke();
-// Pulse ring al passaggio sweep
-const pAge=Date.now()-(friendPulse[f.id]||0);
-if(pAge<600){
-  const p=pAge/600;
-  ctx.beginPath();ctx.arc(fx,fy,8+p*22,0,Math.PI*2);
-  ctx.strokeStyle=hex2rgba(col,(1-p)*0.85);
-  ctx.lineWidth=2.5;
-  ctx.shadowColor=col;ctx.shadowBlur=8*(1-p);
-  ctx.stroke();ctx.shadowBlur=0;
-}
+  const pAge=Date.now()-(friendPulse[f.id]||0);
+  if(pAge<600){const p=pAge/600;ctx.beginPath();ctx.arc(fx,fy,8+p*22,0,Math.PI*2);
+    ctx.strokeStyle=hex2rgba(col,(1-p)*0.85);ctx.lineWidth=2.5;
+    if(!lowPerf){ctx.shadowColor=col;ctx.shadowBlur=8*(1-p);}ctx.stroke();ctx.shadowBlur=0;}
     // Anello tratteggiato se amico selezionato dalla bussola
     if (f.id===selectedFriendId) {
       ctx.beginPath();ctx.arc(fx,fy,18,0,Math.PI*2);
@@ -491,7 +510,7 @@ if(pAge<600){
     ctx.fillStyle=fc;ctx.font='10px sans-serif';ctx.fillText(ds,lx,ly+25);
   });
   // IO
-  ctx.beginPath();ctx.arc(cx,cy,7,0,Math.PI*2);ctx.fillStyle=myColor;ctx.shadowColor=myColor;ctx.shadowBlur=18;ctx.fill();ctx.shadowBlur=0;
+  ctx.beginPath();ctx.arc(cx,cy,7,0,Math.PI*2);ctx.fillStyle=myColor;if(!lowPerf){ctx.shadowColor=myColor;ctx.shadowBlur=18;}ctx.fill();ctx.shadowBlur=0;
   ctx.beginPath();ctx.arc(cx,cy,13,0,Math.PI*2);ctx.strokeStyle=myColor+'55';ctx.lineWidth=1.5;ctx.stroke();
   ctx.fillStyle='#ffffffcc';ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText(myName||'Io',cx,cy-18);ctx.textAlign='left';
   // Bordo + cardinali
@@ -549,7 +568,6 @@ if(pAge<600){
   ctx.fillStyle=_arrowColor;ctx.font='bold 10px sans-serif';ctx.textAlign='center';
   ctx.fillText(_arrowLabel,lblX,lblY+3);
   ctx.textAlign='left';
-
 prevSweepAngle=sweepAngle;
 }
 
@@ -562,13 +580,12 @@ let lastInteract=Date.now();
   document.addEventListener(ev,()=>lastInteract=Date.now(),{passive:true})
 );
 function loop(t){
+  requestAnimationFrame(loop);
+  if(t-prevT<33)return;
   const dt=Math.min((t-prevT)/1000,0.1);prevT=t;
-  const idle=Date.now()-lastInteract>10000;  // idle dopo 10s
-  if(idle&&(t%33)>16.5){requestAnimationFrame(loop);return;}  // ~30fps se idle
   sweepAngle+=dt*1.2;
   compassHeading=lerpAngle(compassHeading,rawHeading,Math.min(1,dt*15));
   draw();
-  requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 
@@ -577,7 +594,7 @@ cv.addEventListener('click', function(e) {
   const rect=cv.getBoundingClientRect();
   const scaleX=cv.width/rect.width, scaleY=cv.height/rect.height;
   const mx=(e.clientX-rect.left)*scaleX, my=(e.clientY-rect.top)*scaleY;
-  const W=cv.width,H=cv.height,cx=W/2,cy=H/2;
+  const W=canvasCssW||cv.width,H=canvasCssH||cv.height,cx=W/2,cy=H/2;
   const R=Math.min(W,H)/2-14;
   let hit=null;
   Object.values(friends).forEach(f=>{
