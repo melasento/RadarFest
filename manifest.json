@@ -1,0 +1,25 @@
+{
+  "name": "Radar Fest",
+  "short_name": "RadarFest",
+  "description": "Non perdere i tuoi amici al concerto",
+  "start_url": "/RadarFest/",
+  "scope": "/RadarFest/",
+  "display": "standalone",
+  "background_color": "#050813",
+  "theme_color": "#00e87a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/melasento/RadarFest/main/icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://raw.githubusercontent.com/melasento/RadarFest/main/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
