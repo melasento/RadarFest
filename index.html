@@ -352,20 +352,18 @@ function enterGroup(){
 // ══════════════════════════════════
 const cv=document.getElementById('cv');
 const ctx=cv.getContext('2d');
+let canvasCssW=0,canvasCssH=0;
 let sweepAngle=0;
 let prevSweepAngle=0;
 const friendPulse={};
 function fixCanvas(){
   const w=document.getElementById('radar-wrap');
   const dpr=window.devicePixelRatio||1;
-  const cssW=w.offsetWidth, cssH=w.offsetHeight;
-  // Dimensione CSS del canvas (quello che vede il layout)
-  cv.style.width=cssW+'px';
-  cv.style.height=cssH+'px';
-  // Dimensione interna reale moltiplicata per DPR
-  cv.width=Math.round(cssW*dpr);
-  cv.height=Math.round(cssH*dpr);
-  // Scala il contesto una volta sola — draw() usa coordinate CSS normali
+  canvasCssW=w.offsetWidth; canvasCssH=w.offsetHeight;
+  cv.style.width=canvasCssW+'px';
+  cv.style.height=canvasCssH+'px';
+  cv.width=Math.round(canvasCssW*dpr);
+  cv.height=Math.round(canvasCssH*dpr);
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 window.addEventListener('resize',fixCanvas);
@@ -374,7 +372,7 @@ window.addEventListener('resize',fixCanvas);
 // DRAW
 // ══════════════════════════════════
 function draw(){
-  const W=cv.width,H=cv.height;
+  const W=canvasCssW||cv.width,H=canvasCssH||cv.height;
   if(!W||!H){fixCanvas();return;}
   const cx=W/2,cy=H/2,R=Math.min(W,H)/2-14;
   ctx.clearRect(0,0,W,H);
@@ -412,8 +410,7 @@ function draw(){
   // Dot amici (dentro clip)
   const now=Date.now();
   const flist=Object.values(friends).filter(f=>f.lat!==null&&myLat!==null);
-  // Sweep pulse detection
-const SA=((sweepAngle%(Math.PI*2))+(Math.PI*2))%(Math.PI*2);
+  const SA=((sweepAngle%(Math.PI*2))+(Math.PI*2))%(Math.PI*2);
 const PSA=((prevSweepAngle%(Math.PI*2))+(Math.PI*2))%(Math.PI*2);
 flist.forEach(f=>{
   const sp=smoothFriendPos[f.id]?.lat!=null?smoothFriendPos[f.id]:{lat:f.lat,lon:f.lon};
@@ -466,7 +463,6 @@ ctx.save();ctx.beginPath();ctx.arc(cx,cy,R-1,0,Math.PI*2);ctx.clip();
     // Anello esterno col colore dell'amico
     ctx.beginPath();ctx.arc(fx,fy,isSOS?15:12,0,Math.PI*2);
     ctx.strokeStyle=isSOS?'#ff334488':fc+'66';ctx.lineWidth=2;ctx.stroke();
-// Pulse ring al passaggio sweep
 const pAge=Date.now()-(friendPulse[f.id]||0);
 if(pAge<600){
   const p=pAge/600;
@@ -558,7 +554,6 @@ if(pAge<600){
   ctx.fillStyle=_arrowColor;ctx.font='bold 10px sans-serif';ctx.textAlign='center';
   ctx.fillText(_arrowLabel,lblX,lblY+3);
   ctx.textAlign='left';
-
 prevSweepAngle=sweepAngle;
 }
 
@@ -586,7 +581,7 @@ cv.addEventListener('click', function(e) {
   const rect=cv.getBoundingClientRect();
   const scaleX=cv.width/rect.width, scaleY=cv.height/rect.height;
   const mx=(e.clientX-rect.left)*scaleX, my=(e.clientY-rect.top)*scaleY;
-  const W=cv.width,H=cv.height,cx=W/2,cy=H/2;
+  const W=canvasCssW||cv.width,H=canvasCssH||cv.height,cx=W/2,cy=H/2;
   const R=Math.min(W,H)/2-14;
   let hit=null;
   Object.values(friends).forEach(f=>{
