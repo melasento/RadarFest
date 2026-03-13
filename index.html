@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
-<title>Friend Compass</title>
+<title>Radar Fest</title>
 <script src="https://unpkg.com/mqtt@5/dist/mqtt.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -125,8 +125,8 @@ body{display:flex;flex-direction:column}
 
 <!-- LANDING -->
 <div class="screen active" id="s-landing">
-  <div class="logo">🧭</div>
-  <div class="title">Friend Compass</div>
+  <div class="logo">📡</div>
+  <div class="title">Radar Fest</div>
   <div class="sub">Trova i tuoi amici in tempo reale</div>
   <div class="card">
     <div class="ct">✨ Crea un gruppo</div>
@@ -228,7 +228,7 @@ let myLat=null,myLon=null,myAcc=null,gpsTs=0;
 let groupName='';
 let lastPubLat=null,lastPubLon=null;  // rate limiting publish
 let gpsMoving=true;  // GPS adattivo
-let friends={},predMap={},friendPulse={};
+let friends={},predMap={};
 let gpsWatch=null,stTimer=null,mqttClient=null;
 let notifications=[];
 let sosTimer=null,sosAudioCtx=null,sosVibInterval=null,sosAudioInterval=null,sosCountdown=SOS_DURATION;
@@ -399,15 +399,7 @@ function draw(){
     const r=R*Math.min(dist/MAX_R,0.96);
     const ar=d2r(bearing-compassHeading)-Math.PI/2;
     const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
-    const col=f.color||'#00c0ff';
-    // sweep hit detection
-    const sweepNorm=((sweepAngle%(Math.PI*2))+Math.PI*2)%(Math.PI*2);
-    const friendNorm=((d2r(bearing-compassHeading)%(Math.PI*2))+Math.PI*2)%(Math.PI*2);
-    let adiff=Math.abs(sweepNorm-friendNorm);
-    if(adiff>Math.PI)adiff=Math.PI*2-adiff;
-    if(adiff<0.10&&r<R*0.97&&(!friendPulse[f.id]||Date.now()-friendPulse[f.id].ts>700)){
-      friendPulse[f.id]={ts:Date.now(),col};
-    }const fc=(now-(f.ts||0))>90000?col+'88':col; // stale=90s, mantieni colore ma semitrasparente
+    const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>90000?col+'88':col; // stale=90s, mantieni colore ma semitrasparente
     // Linea tratteggiata → verde continua se direzione perfetta (±15°)
     const _angleDiff = Math.abs(((bearing - compassHeading) % 360 + 540) % 360 - 180);
     const _onTarget = _angleDiff < 15;
@@ -436,26 +428,6 @@ function draw(){
       ctx.font=`bold ${isSOS?10:9}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.fillStyle='rgba(0,0,0,0.85)';ctx.fillText(initial,fx,fy);
       ctx.textBaseline='alphabetic';ctx.textAlign='left';
-    // pulse ring al passaggio sweep
-    const _hp=friendPulse[f.id];
-    if(_hp&&!isSOS){
-      const _age=Date.now()-_hp.ts;
-      if(_age<700){
-        const _t=_age/700;
-        const toHex=v=>Math.round(v).toString(16).padStart(2,'0');
-        ctx.beginPath();ctx.arc(fx,fy,dotR+_t*16,0,Math.PI*2);
-        ctx.strokeStyle=_hp.col+toHex((1-_t)*120);
-        ctx.lineWidth=1.5;ctx.stroke();
-        ctx.beginPath();ctx.arc(fx,fy,dotR+_t*9,0,Math.PI*2);
-        ctx.strokeStyle=_hp.col+toHex((1-_t)*200);
-        ctx.lineWidth=2.5;ctx.stroke();
-        if(_t<0.25){
-          ctx.beginPath();ctx.arc(fx,fy,dotR+2,0,Math.PI*2);
-          ctx.fillStyle=_hp.col+toHex((1-_t/0.25)*80);
-          ctx.shadowColor=_hp.col;ctx.shadowBlur=18*(1-_t/0.25);ctx.fill();ctx.shadowBlur=0;
-        }
-      }
-    }
     }
     if(isSOS){
       const pulse=((Date.now()%1000)/1000);
@@ -904,7 +876,7 @@ function renderLista(){
 // SHARE
 // ══════════════════════════════════
 function getUrl(){const o=location.origin;if(!o||o==='null'||o.startsWith('file'))return null;return o+location.pathname+'?group='+groupId;}
-function shareWA(){const url=getUrl();const msg=url?'🧭 *Friend Compass*\nUnisciti al gruppo *'+groupId+'*!\n\n'+url:'🧭 *Friend Compass*\nCodice: *'+groupId+'*';if(navigator.share&&url)navigator.share({title:'Friend Compass',url}).catch(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'));else window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');}
+function shareWA(){const url=getUrl();const msg=url?'📡 *Radar Fest*\nUnisciti al gruppo *'+groupId+'*!\n\n'+url:'📡 *Radar Fest*\nCodice: *'+groupId+'*';if(navigator.share&&url)navigator.share({title:'Radar Fest',url}).catch(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'));else window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');}
 function copyLink(){const url=getUrl();if(!url){showToast('⚠️ Serve HTTPS');return;}navigator.clipboard?.writeText(url);showToast('🔗 Link copiato!');}
 function copyCode(){navigator.clipboard?.writeText(groupId);showToast('📋 Codice: '+groupId);}
 function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsWatch)navigator.geolocation.clearWatch(gpsWatch);removeMQTT();friends={};predMap={};smoothFriendPos={};show('s-landing');groupId=null;}
