@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
-<title>Friend Compass</title>
+<title>Radar Fest</title>
 <script src="https://unpkg.com/mqtt@5/dist/mqtt.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -12,11 +12,12 @@
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Segoe UI',Roboto,sans-serif;overflow:hidden}
 body{display:flex;flex-direction:column}
 .screen{display:none;flex-direction:column;flex:1;overflow:hidden}
+#s-landing,#s-name{overflow-y:auto!important;-webkit-overflow-scrolling:touch;}
 .screen.active{display:flex}
 /* LANDING */
-#s-landing{align-items:center;justify-content:center;gap:16px;padding:28px 20px;overflow-y:auto}
+#s-landing{align-items:center;justify-content:flex-start;gap:16px;padding:max(28px,calc(env(safe-area-inset-top,0px) + 16px)) 20px calc(28px + env(safe-area-inset-bottom,0px));overflow-y:auto;-webkit-overflow-scrolling:touch}
 .logo{font-size:56px}.title{font-size:24px;font-weight:800}.sub{font-size:12px;color:var(--dim)}
-.card{background:var(--bg2);border:1px solid var(--ring);border-radius:16px;padding:18px 20px;width:100%;max-width:360px}
+.card{background:var(--bg2);border:1px solid var(--ring);border-radius:16px;padding:18px 20px;width:100%;max-width:360px;box-sizing:border-box}
 .ct{font-size:13px;font-weight:700;color:var(--cyan);margin-bottom:12px}
 .field{width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--ring);border-radius:10px;
        color:var(--text);font-size:14px;outline:none;margin-bottom:10px;font-family:inherit}
@@ -26,7 +27,7 @@ body{display:flex;flex-direction:column}
 .btn-ghost{background:transparent;border:1px solid var(--ring);color:var(--dim);margin-top:8px}
 .hint{color:var(--dim);font-size:11px;text-align:center}
 /* NOME */
-#s-name{align-items:center;justify-content:center;padding:24px 20px}
+#s-name{align-items:center;justify-content:flex-start;padding:max(24px,calc(env(safe-area-inset-top,0px)+12px)) 20px calc(24px + env(safe-area-inset-bottom,0px));overflow-y:auto;-webkit-overflow-scrolling:touch}
 #s-name .card{max-width:360px}
 .crow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;justify-content:center}
 .sw{width:34px;height:34px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:transform .15s}
@@ -56,9 +57,9 @@ body{display:flex;flex-direction:column}
 .notif-badge.show{display:flex}
 /* TABS */
 #tabs{display:flex;flex-shrink:0}
-.tab{flex:1;padding:8px 0;text-align:center;font-size:13px;cursor:pointer;
-     border-bottom:2px solid transparent;background:var(--bg3);color:var(--dim)}
-.tab.active{color:var(--green);border-bottom:2px solid var(--green);background:var(--bg)}
+.tab{flex:1;padding:14px 0;text-align:center;font-size:17px;font-weight:700;cursor:pointer;
+     border-bottom:3px solid transparent;background:var(--bg3);color:var(--dim)}
+.tab.active{color:var(--green);border-bottom:3px solid var(--green);background:var(--bg)}
 /* RADAR */
 #radar-wrap{flex:1;position:relative;overflow:hidden;background:#02040A}
 #cv{position:absolute;top:0;left:0;width:100%;height:100%}
@@ -116,34 +117,28 @@ body{display:flex;flex-direction:column}
        transition:opacity .3s;z-index:999;max-width:94vw;text-align:center}
 #toast.show{opacity:1}
 #warn{position:fixed;top:46px;left:0;right:0;background:#cc220099;backdrop-filter:blur(4px);
-      color:#fff;padding:7px;text-align:center;font-size:12px;font-weight:700;display:none;z-index:997}
-#warn.show{display:block}
+      color:#fff;padding:7px 12px;font-size:12px;font-weight:700;display:none;z-index:997;
+      align-items:center;justify-content:center;gap:4px}
+#warn.show{display:flex}
 
-/* ── LOCALIZER ─────────────────────────────── */
-#loc-bar{
-  position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
-  background:rgba(2,4,18,0.92);border:1.5px solid var(--ring);
-  border-radius:24px;padding:7px 14px 7px 10px;
-  display:none;align-items:center;gap:10px;z-index:20;
-  pointer-events:auto;backdrop-filter:blur(6px);white-space:nowrap;
+/* centra landing se c'è spazio, scrolla se è troppo piccolo */
+#s-landing > * { flex-shrink: 0; }
+@media (min-height: 560px) {
+  #s-landing { justify-content: center; }
 }
-#loc-bar.show{display:flex;}
-.lc-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;}
-.lc-name{font-size:13px;font-weight:700;}
-.lc-info{font-size:11px;color:var(--dim);}
-.lc-compass{font-size:16px;flex-shrink:0;min-width:28px;text-align:center;font-weight:700;}
-.lc-close{font-size:17px;cursor:pointer;color:var(--dim);line-height:1;padding:0 2px;}
+
 </style>
 </head>
 <body>
 
 <!-- LANDING -->
 <div class="screen active" id="s-landing">
-  <div class="logo">🧭</div>
-  <div class="title">Friend Compass</div>
+  <div class="logo">📡</div>
+  <div class="title">Radar Fest</div>
   <div class="sub">Trova i tuoi amici in tempo reale</div>
   <div class="card">
     <div class="ct">✨ Crea un gruppo</div>
+    <input class="field" id="group-name-inp" maxlength="24" placeholder="Nome gruppo (es. Gita Roma)"/>
     <button class="btn btn-g" onclick="startCreate()">Crea gruppo</button>
   </div>
   <div class="card">
@@ -179,7 +174,6 @@ body{display:flex;flex-direction:column}
       <button class="tbtn" id="bell-btn" onclick="toggleNotifPanel()">
         🔔<div class="notif-badge" id="notif-badge">0</div>
       </button>
-      <button class="tbtn" id="compass-btn" onclick="requestCompassPermission()" title="Attiva bussola">🧭</button>
       <button class="tbtn g" onclick="shareWA()" title="Invita su WhatsApp">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
       </button>
@@ -203,14 +197,6 @@ body{display:flex;flex-direction:column}
   </div>
   <div id="radar-wrap">
     <canvas id="cv"></canvas>
-    <!-- LOCALIZER BAR -->
-    <div id="loc-bar">
-      <div class="lc-dot" id="lc-dot"></div>
-      <span class="lc-name" id="lc-name">Amico</span>
-      <span class="lc-info" id="lc-info"></span>
-      <span class="lc-compass" id="lc-compass">·</span>
-      <span class="lc-close" onclick="deselectFriend()">✕</span>
-    </div>
     <!-- SOS BANNER (sul radar, non blocca) -->
     <div id="sos-banner">
       <div class="sos-banner-icon">🚨</div>
@@ -230,7 +216,7 @@ body{display:flex;flex-direction:column}
 
 
 
-<div id="warn">⚠️ Un amico si è allontanato oltre 200m!</div>
+<div id="warn"><span>⚠️ Un amico si è allontanato oltre 2km!</span><button onclick="dismissWarn()" style="background:transparent;border:1px solid #fff8;color:#fff;border-radius:6px;padding:2px 10px;font-size:12px;font-weight:700;cursor:pointer;margin-left:12px;font-family:inherit">✕</button></div>
 <div id="toast"></div>
 
 <script>
@@ -239,7 +225,7 @@ body{display:flex;flex-direction:column}
 // ══════════════════════════════════
 const BROKER='wss://broker.emqx.io:8084/mqtt';
 const COLORS=['#00e87a','#00c0ff','#ff6b6b','#ffa040','#c084fc','#facc15','#f472b6','#38bdf8','#4ade80','#fb923c'];
-const SEP_THR=200,MAX_R=500;
+const SEP_THR=2000,MAX_R=200;
 const SOS_DURATION=120; // secondi
 
 // ══════════════════════════════════
@@ -247,17 +233,17 @@ const SOS_DURATION=120; // secondi
 // ══════════════════════════════════
 let selColor=COLORS[1],myId=null,myName='',myColor=COLORS[1],groupId=null;
 let myLat=null,myLon=null,myAcc=null,gpsTs=0;
+let groupName='';
+let lastPubLat=null,lastPubLon=null;  // rate limiting publish
+let gpsMoving=true;  // GPS adattivo
 let friends={},predMap={};
 let gpsWatch=null,stTimer=null,mqttClient=null;
 let notifications=[];
 let sosTimer=null,sosAudioCtx=null,sosVibInterval=null,sosAudioInterval=null,sosCountdown=SOS_DURATION;
 let sosFromId=null,sosFromPos=null,sosCdInterval=null,sosActiveId=null;
-let rawHeading=0,compassHeading=0,compassActive=false;
-let selectedFriendId=null;
-const headingBuf=[];  // buffer mediana bussola
-const HEADING_BUF_SIZE=12; // ultimi 12 campioni (~200ms a 60fps)
-let smoothFriendPos={}; // target GPS filtrato
-let displayFriendPos={}; // posizione visiva animata per-frame
+let rawHeading=0,compassHeading=0; // solo per la freccia nord, non per il radar
+let selectedFriendId=null; // ID amico puntato dalla bussola, null = bussola device
+let smoothFriendPos={}; // posizioni smussate per eliminare jitter GPS
 
 // ══════════════════════════════════
 // UTILS
@@ -286,7 +272,7 @@ function updateSmoothedPos(id, newLat, newLon, acc){
   const A = acc||40; // accuratezza dichiarata dal telefono in metri
 
   // Dead zone adattiva: metà dell'accuratezza (sotto questo = puro rumore)
-  const DEAD_ZONE = Math.max(A * 0.8, 30); // minimo assoluto 30m — sotto questa soglia = rumore
+  const DEAD_ZONE = Math.max(A * 0.6, 15);
   // Salto reale: oltre 3× l'accuratezza = l'amico si è davvero spostato
   const JUMP_THR = Math.max(A * 3, 80);
   // Peso adattivo: GPS preciso (acc=10) → peso=0.9, impreciso (acc=80) → peso=0.15
@@ -340,11 +326,11 @@ function buildPicker(){
 // ══════════════════════════════════
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
 function goLanding(){show('s-landing');groupId=null;}
-function startCreate(){groupId=rndCode();buildPicker();show('s-name');setTimeout(()=>document.getElementById('name-inp').focus(),80);}
+function startCreate(){groupId=rndCode();groupName=document.getElementById('group-name-inp').value.trim()||('Gruppo '+groupId);buildPicker();show('s-name');setTimeout(()=>document.getElementById('name-inp').focus(),80);}
 function startJoin(){
   const c=document.getElementById('code-inp').value.trim().toUpperCase();
   if(c.length<4){showToast('⚠️ Codice non valido');return;}
-  groupId=c;buildPicker();show('s-name');setTimeout(()=>document.getElementById('name-inp').focus(),80);
+  groupId=c;groupName='';buildPicker();show('s-name');setTimeout(()=>document.getElementById('name-inp').focus(),80);
 }
 function confirmName(){
   const n=document.getElementById('name-inp').value.trim();
@@ -354,21 +340,10 @@ function confirmName(){
 function enterGroup(){
   show('s-radar');
   document.getElementById('cbdg').textContent=groupId;
-  document.getElementById('gnm').textContent='Gruppo '+groupId;
+  document.getElementById('gnm').textContent=groupName||('Gruppo '+groupId);
   setTimeout(fixCanvas,50);
   connectMQTT();startGps();
-  // Su Android e browser non-iOS: parte subito
-  startCompassDirect();
-  // iOS 13+: se dopo 1s non arrivano dati, mostra bottone tap
-  setTimeout(()=>{
-    if(!compassActive){
-      const b=document.getElementById('compass-btn');
-      b.style.background='#ffa04033';
-      b.style.color='#ffa040';
-      b.title='Tocca per attivare la bussola (iOS)';
-      showToast('🧭 Tocca il pulsante bussola per attivarla');
-    }
-  },1500);
+  requestCompassPermission();
 
 }
 
@@ -378,463 +353,316 @@ function enterGroup(){
 const cv=document.getElementById('cv');
 const ctx=cv.getContext('2d');
 let sweepAngle=0;
+let prevSweepAngle=0;
+const friendPulse={};
 function fixCanvas(){
   const w=document.getElementById('radar-wrap');
   cv.width=w.offsetWidth;cv.height=w.offsetHeight;
 }
-window.addEventListener('resize',()=>{setTimeout(fixCanvas,100)});
-window.addEventListener('orientationchange',()=>{setTimeout(fixCanvas,300)});
-
-// Tap sul canvas: se vicino al centro (dot IO) → aggiorna GPS subito
-cv.addEventListener('click',e=>{
-  const rect=cv.getBoundingClientRect();
-  const tx=e.clientX-rect.left,ty=e.clientY-rect.top;
-  const cx=cv.width/2,cy=cv.height/2;
-  const dist=Math.sqrt((tx-cx)**2+(ty-cy)**2);
-  // Selezione amico
-  let hit=null;
-  Object.values(friends).forEach(f=>{
-    if(f.fx!==undefined&&f.fy!==undefined){
-      const d=Math.sqrt((tx-f.fx)**2+(ty-f.fy)**2);
-      if(d<24)hit=f;
-    }
-  });
-  if(hit){selectedFriendId===hit.id?deselectFriend():selectFriend(hit.id);return;}
-  if(dist<28) forceGpsUpdate();
-});
-cv.addEventListener('touchend',e=>{
-  if(e.changedTouches.length!==1)return;
-  const rect=cv.getBoundingClientRect();
-  const t=e.changedTouches[0];
-  const tx=t.clientX-rect.left,ty=t.clientY-rect.top;
-  const cx=cv.width/2,cy=cv.height/2;
-  const dist=Math.sqrt((tx-cx)**2+(ty-cy)**2);
-  // Selezione amico (touch)
-  let hit=null;
-  Object.values(friends).forEach(f=>{
-    if(f.fx!==undefined&&f.fy!==undefined){
-      const d=Math.sqrt((tx-f.fx)**2+(ty-f.fy)**2);
-      if(d<28)hit=f;
-    }
-  });
-  if(hit){selectedFriendId===hit.id?deselectFriend():selectFriend(hit.id);return;}
-  if(dist<28) forceGpsUpdate();
-},{passive:true});
+window.addEventListener('resize',fixCanvas);
 
 // ══════════════════════════════════
 // DRAW
 // ══════════════════════════════════
 function draw(){
-  // Dimensioni in pixel CSS (indipendenti dal DPR)
-  const W=cv.clientWidth, H=cv.clientHeight;
-  if(!W||!H)return;
-  const cx=W/2, cy=H/2, R=Math.min(W,H)/2-14;
-
+  const W=cv.width,H=cv.height;
+  if(!W||!H){fixCanvas();return;}
+  const cx=W/2,cy=H/2,R=Math.min(W,H)/2-14;
   ctx.clearRect(0,0,W,H);
-
-  // Sfondo
   const bg=ctx.createRadialGradient(cx,cy,0,cx,cy,R);
   bg.addColorStop(0,'#071d2a');bg.addColorStop(0.7,'#040e16');bg.addColorStop(1,'#020409');
   ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fillStyle=bg;ctx.fill();
-
-  // Sweep rotante
-  ctx.save();
-  ctx.translate(cx,cy);
-  ctx.rotate(sweepAngle);
+  // Sweep
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(sweepAngle);
   for(let i=0;i<8;i++){
-    ctx.beginPath();ctx.moveTo(0,0);
-    ctx.arc(0,0,R,-Math.PI/2-0.9+i*0.11,-Math.PI/2-0.9+(i+1)*0.11);
-    ctx.closePath();
+    ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,-Math.PI/2-0.9+i*0.11,-Math.PI/2-0.9+(i+1)*0.11);ctx.closePath();
     ctx.fillStyle=`rgba(0,200,100,${0.01+i*0.012})`;ctx.fill();
   }
   ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,-Math.PI/2-0.2,-Math.PI/2+0.2);ctx.closePath();
-  const cg=ctx.createLinearGradient(0,-R,0,0);
-  cg.addColorStop(0,'rgba(0,232,122,0.30)');cg.addColorStop(1,'rgba(0,232,122,0.02)');
+  const cg=ctx.createLinearGradient(0,-R,0,0);cg.addColorStop(0,'rgba(0,232,122,0.30)');cg.addColorStop(1,'rgba(0,232,122,0.02)');
   ctx.fillStyle=cg;ctx.fill();
-  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-R);
-  ctx.strokeStyle='#00e87a';ctx.lineWidth=2;ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-R);ctx.strokeStyle='#00e87a';ctx.lineWidth=2;ctx.stroke();
   ctx.restore();
-
-  // Cerchi + distanze
-  ctx.save();ctx.translate(cx,cy);
-  [1/3,2/3,1].forEach(f=>{
-    ctx.beginPath();ctx.arc(0,0,R*f,0,Math.PI*2);
-    ctx.strokeStyle='#1a3a4a';ctx.lineWidth=1;ctx.stroke();
-    ctx.fillStyle='#3a7a8a';ctx.font='10px sans-serif';ctx.textAlign='center';
-    ctx.fillText(Math.round(MAX_R*f)+'m',0,-R*f+13);
+  // Cerchi
+  [25/200,100/200,1].forEach(f=>{
+    ctx.beginPath();ctx.arc(cx,cy,R*f,0,Math.PI*2);ctx.strokeStyle='#1a3a4a';ctx.lineWidth=1;ctx.stroke();
+    ctx.fillStyle='#3a7a8a';ctx.font='10px sans-serif';ctx.textAlign='center';ctx.fillText(Math.round(MAX_R*f)+'m',cx,cy-R*f+13);
   });
+  // Linee cardinali
   ctx.strokeStyle='#1a3a4a99';ctx.lineWidth=0.8;
-  [[0,-1],[0,1],[1,0],[-1,0]].forEach(([dx,dy])=>{
-    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(dx*R,dy*R);ctx.stroke();
+  ;[0,90,180,270].forEach(deg=>{
+    const a=d2r(deg-compassHeading)-Math.PI/2;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a)*R,cy+Math.sin(a)*R);ctx.stroke();
   });
   ctx.setLineDash([2,5]);
-  [[1,-1],[1,1],[-1,1],[-1,-1]].forEach(([dx,dy])=>{
-    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(dx*R*0.707,dy*R*0.707);ctx.stroke();
+  ;[45,135,225,315].forEach(deg=>{
+    const a=d2r(deg-compassHeading)-Math.PI/2;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a)*R*0.707,cy+Math.sin(a)*R*0.707);ctx.stroke();
   });
   ctx.setLineDash([]);
-  ctx.restore();
-
-  // Cardinali fissi
-  ctx.fillStyle='#00c0ffcc';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
-  ctx.fillText('N',cx,cy-R+18);
-  ctx.fillStyle='#00c0ff66';ctx.font='11px sans-serif';
-  ctx.fillText('S',cx,cy+R-8);
-  ctx.textAlign='left';ctx.fillText('O',cx-R+8,cy+4);
-  ctx.textAlign='right';ctx.fillText('E',cx+R-8,cy+4);
-  ctx.textAlign='left';
-
-  // DOT AMICI
+  // Dot amici (dentro clip)
   const now=Date.now();
-  const flist=Object.values(friends).filter(f=>f.lat!=null&&myLat!=null);
+  const flist=Object.values(friends).filter(f=>f.lat!==null&&myLat!==null);
+  // Sweep pulse detection
+const SA=((sweepAngle%(Math.PI*2))+(Math.PI*2))%(Math.PI*2);
+const PSA=((prevSweepAngle%(Math.PI*2))+(Math.PI*2))%(Math.PI*2);
+flist.forEach(f=>{
+  const sp=smoothFriendPos[f.id]?.lat!=null?smoothFriendPos[f.id]:{lat:f.lat,lon:f.lon};
+  const {bearing}=distBear(myLat,myLon,sp.lat,sp.lon);
+  const trig=((d2r(bearing-compassHeading)%(Math.PI*2))+(Math.PI*2))%(Math.PI*2);
+  const crossed=PSA<=SA?(trig>=PSA&&trig<SA):(trig>=PSA||trig<SA);
+  if(crossed)friendPulse[f.id]=Date.now();
+});
+ctx.save();ctx.beginPath();ctx.arc(cx,cy,R-1,0,Math.PI*2);ctx.clip();
   flist.forEach(f=>{
-    const sp=displayFriendPos[f.id]||smoothFriendPos[f.id]||{lat:f.lat,lon:f.lon};
-    const vp=sp.lat!=null?sp:{lat:f.lat,lon:f.lon};
-    const{dist,bearing}=distBear(myLat,myLon,vp.lat,vp.lon);
+    const sp=smoothFriendPos[f.id]||{lat:f.lat,lon:f.lon};const pr=(sp.lat!==null&&sp.lat!==undefined)?sp:{lat:f.lat,lon:f.lon};const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
     const r=R*Math.min(dist/MAX_R,0.96);
-    const ar=d2r(bearing)-Math.PI/2;
-    f._fx=cx+r*Math.cos(ar); f._fy=cy+r*Math.sin(ar);
-    const col=f.color||'#00c0ff';
-    f._fc=(now-(f.ts||0))>90000?col+'88':col;
-    f._isSOS=!!(sosActiveId&&f.id===sosActiveId);
-  });
-
-  ctx.save();ctx.beginPath();ctx.arc(cx,cy,R-1,0,Math.PI*2);ctx.clip();
-  flist.forEach(f=>{
-    const{_fx:fx,_fy:fy,_fc:fc,_isSOS:isSOS}=f;
-    ctx.save();ctx.setLineDash([3,6]);
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);
-    ctx.strokeStyle=fc+'55';ctx.lineWidth=1;ctx.stroke();ctx.restore();
-    const blink=isSOS&&(now%600<300);
-    const dc=isSOS?'#ff3344':fc;
+    const ar=d2r(bearing-compassHeading)-Math.PI/2;
+    const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
+    const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>90000?col+'88':col; // stale=90s, mantieni colore ma semitrasparente
+    // Linea tratteggiata → verde continua se direzione perfetta (±15°)
+    const _angleDiff = Math.abs(((bearing - compassHeading) % 360 + 540) % 360 - 180);
+    const _onTarget = _angleDiff < 15;
+    ctx.save();
+    if (_onTarget) {
+      ctx.setLineDash([]);
+      ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);
+      ctx.strokeStyle='#00e87a';ctx.lineWidth=2;
+      ctx.shadowColor='#00e87a';ctx.shadowBlur=8;
+      ctx.stroke();ctx.shadowBlur=0;
+    } else {
+      ctx.setLineDash([3,6]);
+      ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);ctx.strokeStyle=fc+'55';ctx.lineWidth=1;ctx.stroke();
+    }
+    ctx.restore();
+    const isSOS=sosActiveId&&f.id===sosActiveId;
+    const blink=isSOS&&(Date.now()%600<300);
+    const dotColor=isSOS?'#ff3344':fc;
+    const dotR=isSOS?9:8; // dot più grande
     if(!blink){
-      ctx.beginPath();ctx.arc(fx,fy,8,0,Math.PI*2);
-      ctx.fillStyle=dc;ctx.shadowColor=dc;ctx.shadowBlur=isSOS?24:14;ctx.fill();ctx.shadowBlur=0;
-      ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillStyle='rgba(0,0,0,0.85)';ctx.fillText((f.name||'?')[0].toUpperCase(),fx,fy);
+      // Cerchio pieno col colore dell'amico
+      ctx.beginPath();ctx.arc(fx,fy,dotR,0,Math.PI*2);
+      ctx.fillStyle=dotColor;ctx.shadowColor=dotColor;ctx.shadowBlur=isSOS?24:16;ctx.fill();ctx.shadowBlur=0;
+      // Iniziale del nome al centro del dot
+      const initial=(f.name||'?')[0].toUpperCase();
+      ctx.font=`bold ${isSOS?10:9}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillStyle='rgba(0,0,0,0.85)';ctx.fillText(initial,fx,fy);
       ctx.textBaseline='alphabetic';ctx.textAlign='left';
     }
     if(isSOS){
-      const p=(now%1000)/1000;
-      ctx.beginPath();ctx.arc(fx,fy,13+p*10,0,Math.PI*2);
-      ctx.strokeStyle=`rgba(255,51,68,${0.7-p*0.7})`;ctx.lineWidth=2;ctx.stroke();
+      const pulse=((Date.now()%1000)/1000);
+      ctx.beginPath();ctx.arc(fx,fy,13+pulse*10,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(255,51,68,${0.7-pulse*0.7})`;ctx.lineWidth=2;ctx.stroke();
     }
+    // Anello esterno col colore dell'amico
     ctx.beginPath();ctx.arc(fx,fy,isSOS?15:12,0,Math.PI*2);
     ctx.strokeStyle=isSOS?'#ff334488':fc+'66';ctx.lineWidth=2;ctx.stroke();
-    const accR=Math.min(R*(f.acc||40)/MAX_R,36);
-    if(accR>13&&!isSOS){
-      ctx.beginPath();ctx.arc(fx,fy,accR,0,Math.PI*2);
-      ctx.strokeStyle=fc+'22';ctx.lineWidth=1;ctx.setLineDash([2,4]);ctx.stroke();ctx.setLineDash([]);
+// Pulse ring al passaggio sweep
+const pAge=Date.now()-(friendPulse[f.id]||0);
+if(pAge<600){
+  const p=pAge/600;
+  ctx.beginPath();ctx.arc(fx,fy,8+p*22,0,Math.PI*2);
+  ctx.strokeStyle=hex2rgba(col,(1-p)*0.85);
+  ctx.lineWidth=2.5;
+  ctx.shadowColor=col;ctx.shadowBlur=8*(1-p);
+  ctx.stroke();ctx.shadowBlur=0;
+}
+    // Anello tratteggiato se amico selezionato dalla bussola
+    if (f.id===selectedFriendId) {
+      ctx.beginPath();ctx.arc(fx,fy,18,0,Math.PI*2);
+      ctx.strokeStyle='#ffffff88';ctx.lineWidth=1.5;
+      ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);
     }
   });
   ctx.restore();
-
-  // Label amici
+  // Label amici (fuori clip)
   flist.forEach(f=>{
-    const{_fx:fx,_fy:fy,_fc:fc}=f;if(fx===undefined)return;
-    const{dist}=distBear(myLat,myLon,f.lat,f.lon);
-    const nm=f.name||'?';
-    const ds=dist<1000?Math.round(dist)+'m':(dist/1000).toFixed(1)+'km';
+    const sp=smoothFriendPos[f.id]||{lat:f.lat,lon:f.lon};const pr=(sp.lat!==null&&sp.lat!==undefined)?sp:{lat:f.lat,lon:f.lon};const{dist,bearing}=distBear(myLat,myLon,pr.lat,pr.lon);
+    const r=R*Math.min(dist/MAX_R,0.96);
+    const ar=d2r(bearing-compassHeading)-Math.PI/2;
+    const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
+    const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>90000?col+'88':col; // stale=90s, mantieni colore ma semitrasparente
+    const nm=f.name||'?',ds=Math.round(dist)+'m';
     ctx.font='bold 11px sans-serif';
-    const tw=Math.max(ctx.measureText(nm).width,ctx.measureText(ds).width)+8;
-    const th=28;
-    let lx=fx<cx?fx-tw-10:fx+14, ly=fy-14;
-    lx=Math.max(4,Math.min(W-tw-4,lx));ly=Math.max(20,Math.min(H-th-4,ly));
-    ctx.fillStyle='rgba(2,4,14,0.85)';ctx.fillRect(lx-2,ly,tw+4,th);
-    ctx.fillStyle=fc;ctx.fillRect(lx-2,ly,3,th);
-    ctx.fillStyle='#ffffffee';ctx.font='bold 11px sans-serif';ctx.textAlign='left';
-    ctx.fillText(nm,lx+4,ly+13);
-    ctx.fillStyle=fc;ctx.font='10px sans-serif';ctx.fillText(ds,lx+4,ly+25);
+    const tw=Math.max(ctx.measureText(nm).width,ctx.measureText(ds).width)+10;
+    const th=28,lx=fx<cx?fx-tw-6:fx+14,ly=fy-10;
+    ctx.fillStyle='rgba(2,4,14,0.82)';ctx.fillRect(lx-2,ly,tw+2,th);
+    ctx.fillStyle='#ffffffee';ctx.font='bold 11px sans-serif';ctx.textAlign='left';ctx.fillText(nm,lx,ly+13);
+    ctx.fillStyle=fc;ctx.font='10px sans-serif';ctx.fillText(ds,lx,ly+25);
   });
-
-  // IO dot
-  ctx.beginPath();ctx.arc(cx,cy,7,0,Math.PI*2);
-  ctx.fillStyle=myColor;ctx.shadowColor=myColor;ctx.shadowBlur=18;ctx.fill();ctx.shadowBlur=0;
-  ctx.beginPath();ctx.arc(cx,cy,13,0,Math.PI*2);
-  ctx.strokeStyle=myColor+'55';ctx.lineWidth=1.5;ctx.stroke();
-  ctx.fillStyle='#ffffffcc';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
-  ctx.fillText(myName||'Io',cx,cy-18);
-  ctx.fillStyle='#ffffff33';ctx.font='9px sans-serif';ctx.fillText('tocca',cx,cy+22);
+  // IO
+  ctx.beginPath();ctx.arc(cx,cy,7,0,Math.PI*2);ctx.fillStyle=myColor;ctx.shadowColor=myColor;ctx.shadowBlur=18;ctx.fill();ctx.shadowBlur=0;
+  ctx.beginPath();ctx.arc(cx,cy,13,0,Math.PI*2);ctx.strokeStyle=myColor+'55';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.fillStyle='#ffffffcc';ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText(myName||'Io',cx,cy-18);ctx.textAlign='left';
+  // Bordo + cardinali
+  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.strokeStyle='#1a3a4a';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='#00c0ffcc';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+  ;[['N',0],['E',90],['S',180],['O',270]].forEach(([lbl,deg])=>{
+    const a=d2r(deg-compassHeading)-Math.PI/2;
+    ctx.textAlign='center';
+    ctx.fillText(lbl, cx+(R-16)*Math.cos(a), cy+(R-16)*Math.sin(a)+4);
+  });
   ctx.textAlign='left';
 
-  // Bussola (piccola, angolo in alto a destra, non disturba il radar)
-  if(compassActive){
-    const bx=W-34, by=34, br=20;
-    ctx.beginPath();ctx.arc(bx,by,br,0,Math.PI*2);
-    ctx.fillStyle='rgba(2,4,18,0.88)';ctx.fill();
-    ctx.strokeStyle='#2a4455';ctx.lineWidth=1.5;ctx.stroke();
-    ctx.save();ctx.translate(bx,by);ctx.rotate(-d2r(displayHeading));
-    ctx.beginPath();ctx.moveTo(0,-(br-4));ctx.lineTo(-4,4);ctx.lineTo(4,4);ctx.closePath();
-    ctx.fillStyle='#ff4444';ctx.fill();
-    ctx.beginPath();ctx.moveTo(0,(br-4));ctx.lineTo(-4,-4);ctx.lineTo(4,-4);ctx.closePath();
-    ctx.fillStyle='#667788';ctx.fill();
-    ctx.restore();
-    ctx.fillStyle='#ff444488';ctx.font='bold 8px sans-serif';ctx.textAlign='center';
-    ctx.fillText('N',bx,by-br-2);
-    ctx.fillStyle='#ffa040aa';ctx.font='8px sans-serif';
-    ctx.fillText(Math.round(displayHeading)+'°',bx,by+br+9);
-    ctx.textAlign='left';
+  // ── Freccia: punta verso amico selezionato o verso dove sei rivolto (bussola device) ──
+  let _arrowDeg, _arrowColor, _arrowLabel;
+  const _selF = selectedFriendId && friends[selectedFriendId];
+  const _selPos = _selF && (
+    (smoothFriendPos[selectedFriendId] && smoothFriendPos[selectedFriendId].lat != null)
+      ? smoothFriendPos[selectedFriendId]
+      : (_selF.lat != null ? {lat:_selF.lat, lon:_selF.lon} : null)
+  );
+  if (_selPos && myLat != null) {
+    const {bearing:_b} = distBear(myLat, myLon, _selPos.lat, _selPos.lon);
+    _arrowDeg   = _b - compassHeading;
+    _arrowColor = friends[selectedFriendId].color || '#00c0ff';
+    _arrowLabel = (friends[selectedFriendId].name || '?').slice(0,6);
+  } else {
+    _arrowDeg   = 0;
+    _arrowColor = '#ffa040';
+    _arrowLabel = 'TU';
   }
+  const fRad = d2r(_arrowDeg);
+  const fX = cx+(R+2)*Math.sin(fRad);
+  const fY = cy-(R+2)*Math.cos(fRad);
+  // Arco colorato sul bordo
+  ctx.beginPath();
+  ctx.arc(cx,cy,R,fRad-Math.PI/2-0.35,fRad-Math.PI/2+0.35);
+  ctx.strokeStyle=_arrowColor+'99';ctx.lineWidth=4;ctx.stroke();
+  // Triangolo freccia
+  ctx.save();
+  ctx.translate(fX,fY);
+  ctx.rotate(fRad);
+  ctx.beginPath();
+  ctx.moveTo(0,-10);
+  ctx.lineTo(-6,4);
+  ctx.lineTo(6,4);
+  ctx.closePath();
+  ctx.fillStyle=_arrowColor;
+  ctx.shadowColor=_arrowColor;ctx.shadowBlur=12;
+  ctx.fill();ctx.shadowBlur=0;
+  ctx.restore();
+  // Label
+  const lblOff=22;
+  const lblX=cx+(R+lblOff)*Math.sin(fRad);
+  const lblY=cy-(R+lblOff)*Math.cos(fRad);
+  ctx.fillStyle=_arrowColor;ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+  ctx.fillText(_arrowLabel,lblX,lblY+3);
+  ctx.textAlign='left';
 
-  // ══ LOCALIZER ARROW ══════════════════════════════════════════════════════
-  if(selectedFriendId && friends[selectedFriendId]){
-    const sf=friends[selectedFriendId];
-    const sp=smoothFriendPos[selectedFriendId]||(sf.lat!==null?{lat:sf.lat,lon:sf.lon}:null);
-    if(sp && myLat!==null){
-      const{dist,bearing}=distBear(myLat,myLon,sp.lat,sp.lon);
-      const col=sf.color||'#00c0ff';
-      // Angolo schermo: nord-up. Se bussola attiva ruota rispetto al device
-      let ang=d2r(bearing)-Math.PI/2;
-      if(compassActive) ang=d2r(bearing-displayHeading)-Math.PI/2;
-
-      const arL=R*0.62;      // distanza centro→punta
-      const hw=18, sw=7;     // halfWidth testa e gambo
-      const notchY=-arL+42;  // base della punta
-      const tailY= arL*0.22; // base gambo
-
-      ctx.save();
-      ctx.translate(cx,cy);
-      ctx.rotate(ang);
-
-      // Alone luminoso dietro
-      const gl=ctx.createLinearGradient(0,-arL,0,tailY);
-      gl.addColorStop(0,hex2rgba(col,0.55));
-      gl.addColorStop(0.55,hex2rgba(col,0.10));
-      gl.addColorStop(1,'rgba(0,0,0,0)');
-      ctx.beginPath();
-      ctx.moveTo(0,-arL);ctx.lineTo(-hw*1.1,notchY);ctx.lineTo(hw*1.1,notchY);
-      ctx.closePath();ctx.fillStyle=gl;ctx.fill();
-
-      // Freccia (corpo+punta)
-      ctx.beginPath();
-      ctx.moveTo(0,-arL);          // punta
-      ctx.lineTo(-hw, notchY);     // ala sinistra
-      ctx.lineTo(-sw, notchY+4);   // spalla sin
-      ctx.lineTo(-sw, tailY);      // fondo gambo sin
-      ctx.lineTo( sw, tailY);      // fondo gambo des
-      ctx.lineTo( sw, notchY+4);   // spalla des
-      ctx.lineTo( hw, notchY);     // ala destra
-      ctx.closePath();
-      ctx.fillStyle=col;
-      ctx.shadowColor=col;ctx.shadowBlur=22;
-      ctx.fill();ctx.shadowBlur=0;
-
-      // Cerchietto alla base (origine)
-      ctx.beginPath();ctx.arc(0,tailY+8,5,0,Math.PI*2);
-      ctx.fillStyle=hex2rgba(col,0.5);ctx.fill();
-
-      ctx.restore();
-
-      // Aggiorna barra info
-      const ds=dist<1000?Math.round(dist)+'m':(dist/1000).toFixed(1)+'km';
-      const dir=cardinal(bearing);
-      document.getElementById('lc-info').textContent=ds;
-      // Freccia direzionale Unicode per la barra
-      const uAngDeg=((bearing-displayHeading)%360+360)%360;
-      const arrows=['↑','↗','→','↘','↓','↙','←','↖'];
-      const ai=Math.round(uAngDeg/45)%8;
-      document.getElementById('lc-compass').textContent=
-        compassActive?arrows[ai]:dir;
-      document.getElementById('lc-compass').style.color=col;
-    }
-  }
-  // ══ fine LOCALIZER ═══════════════════════════════════════════════════════
-
-
-  // Bordo radar
-  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);
-  ctx.strokeStyle='#1a3a4a';ctx.lineWidth=2;ctx.stroke();
+prevSweepAngle=sweepAngle;
 }
 
 // ══════════════════════════════════
 // LOOP
 // ══════════════════════════════════
-let prevT=0,lastDraw=0;
-const FRAME_MS=1000/30; // 30fps: fluido visivamente
-
-// Heading visualizzato — si aggiorna solo con isteresi (no micro-tremore)
-let displayHeading=0;      // heading attualmente mostrato sul radar
-let headingTarget=0;       // target verso cui ci stiamo muovendo
-let headingMoving=false;   // true = stiamo ruotando verso un nuovo target
-
-function updateDisplayHeading(){
-  if(!compassActive)return;
-  // Quantizza il target a passi di 5°
-  headingTarget=Math.round(compassHeading/5)*5;
-  let diff=headingTarget-displayHeading;
-  while(diff>180)diff-=360;while(diff<-180)diff+=360;
-
-  if(!headingMoving && Math.abs(diff)>8){
-    // Inizia rotazione solo se cambio > 8° (isteresi alta: ignora tremore)
-    headingMoving=true;
-  }
-  if(headingMoving){
-    // Interpolazione veloce verso target
-    displayHeading=lerpAngle(displayHeading,headingTarget,0.12);
-    let remaining=headingTarget-displayHeading;
-    while(remaining>180)remaining-=360;while(remaining<-180)remaining+=360;
-    if(Math.abs(remaining)<0.5){
-      displayHeading=headingTarget;
-      headingMoving=false; // arrivato, smette di muoversi
-    }
-  }
-}
-
+let prevT=0;
+let lastInteract=Date.now();
+['touchstart','touchmove','click','pointermove'].forEach(ev=>
+  document.addEventListener(ev,()=>lastInteract=Date.now(),{passive:true})
+);
 function loop(t){
-  requestAnimationFrame(loop);
   const dt=Math.min((t-prevT)/1000,0.1);prevT=t;
+  const idle=Date.now()-lastInteract>10000;  // idle dopo 10s
+  if(idle&&(t%33)>16.5){requestAnimationFrame(loop);return;}  // ~30fps se idle
   sweepAngle+=dt*1.2;
-
-  // Anima displayFriendPos verso smoothFriendPos ogni frame
-  // α = 1-(1-base)^dt → frame-rate independent, ~1.5s per raggiungere il target
-  const α=1-Math.pow(0.02, dt);
-  Object.keys(smoothFriendPos).forEach(id=>{
-    const tgt=smoothFriendPos[id];
-    if(!tgt||tgt.lat==null)return;
-    if(!displayFriendPos[id]){
-      displayFriendPos[id]={lat:tgt.lat,lon:tgt.lon}; // primo valore: posiziona subito
-      return;
-    }
-    const cur=displayFriendPos[id];
-    displayFriendPos[id]={
-      lat: cur.lat + (tgt.lat-cur.lat)*α,
-      lon: cur.lon + (tgt.lon-cur.lon)*α
-    };
-  });
-
-  if(compassActive){
-    let diff=rawHeading-compassHeading;
-    while(diff>180)diff-=360;while(diff<-180)diff+=360;
-    if(Math.abs(diff)>1.5) compassHeading=lerpAngle(compassHeading,rawHeading,0.04);
-    updateDisplayHeading();
-  }
-  if(t-lastDraw>=FRAME_MS){lastDraw=t;draw();}
+  compassHeading=lerpAngle(compassHeading,rawHeading,Math.min(1,dt*15));
+  draw();
+  requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
+
+// ── Click su amico nel radar: seleziona/deseleziona per puntare la bussola ──
+cv.addEventListener('click', function(e) {
+  const rect=cv.getBoundingClientRect();
+  const scaleX=cv.width/rect.width, scaleY=cv.height/rect.height;
+  const mx=(e.clientX-rect.left)*scaleX, my=(e.clientY-rect.top)*scaleY;
+  const W=cv.width,H=cv.height,cx=W/2,cy=H/2;
+  const R=Math.min(W,H)/2-14;
+  let hit=null;
+  Object.values(friends).forEach(f=>{
+    if(f.lat==null||myLat==null) return;
+    const sp=(smoothFriendPos[f.id]&&smoothFriendPos[f.id].lat!=null)?smoothFriendPos[f.id]:{lat:f.lat,lon:f.lon};
+    const {dist,bearing}=distBear(myLat,myLon,sp.lat,sp.lon);
+    const r=R*Math.min(dist/MAX_R,0.96);
+    const ar=d2r(bearing-compassHeading)-Math.PI/2;
+    const fx=cx+r*Math.cos(ar), fy=cy+r*Math.sin(ar);
+    if(Math.hypot(mx-fx,my-fy)<24) hit=f.id;
+  });
+  selectedFriendId=(hit&&hit!==selectedFriendId)?hit:null;
+});
 
 // ══════════════════════════════════
 // GPS + BUSSOLA
 // ══════════════════════════════════
-const GPS_INTERVAL=30000; // ms tra un fix e l'altro (batteria)
-let gpsInterval=null;
-
 function startGps(){
   if(!navigator.geolocation){showToast('⚠️ GPS non supportato');return;}
-  fetchGps(true); // primo fix subito
-  gpsInterval=setInterval(()=>fetchGps(false), GPS_INTERVAL);
-}
-
-function fetchGps(first){
   const dot=document.getElementById('gdot'),lbl=document.getElementById('glbl');
-  if(first||myLat===null){dot.className='gdot wait';lbl.textContent='GPS...';}
-
-  // Prova prima con alta precisione
-  navigator.geolocation.getCurrentPosition(pos=>{
-    const lat=pos.coords.latitude,lon=pos.coords.longitude;
-    const acc=Math.round(pos.coords.accuracy);
-    gpsTs=Date.now();
-    if(acc>150){
-      // Fix molto impreciso: tenta anche modalità bassa precisione (WiFi/celle)
-      // a volte è più stabile del GPS con segnale debole
-      navigator.geolocation.getCurrentPosition(pos2=>{
-        const acc2=Math.round(pos2.coords.accuracy);
-        // Usa il fix più preciso tra i due
-        if(acc2<acc){
-          myLat=pos2.coords.latitude;myLon=pos2.coords.longitude;myAcc=acc2;
+  dot.className='gdot wait';lbl.textContent='GPS...';
+  function startWatch(moving){
+    if(gpsWatch)navigator.geolocation.clearWatch(gpsWatch);
+    gpsMoving=moving;
+    const opts=moving
+      ?{enableHighAccuracy:true,maximumAge:5000,timeout:20000}
+      :{enableHighAccuracy:false,maximumAge:45000,timeout:60000};
+    gpsWatch=navigator.geolocation.watchPosition(pos=>{
+      const lat=pos.coords.latitude,lon=pos.coords.longitude,acc=Math.round(pos.coords.accuracy);
+      gpsTs=Date.now();dot.className='gdot ok';
+      lbl.textContent='GPS ±'+acc+'m'+(gpsMoving?'':' 💤');
+      if(myLat!==null){
+        const d=distBear(myLat,myLon,lat,lon).dist;
+        if(d<2){
+          if(!stTimer)stTimer=setTimeout(()=>{
+            navigator.geolocation.clearWatch(gpsWatch);
+            dot.className='gdot old';lbl.textContent='GPS fermo';
+          },60000);
+          // Se già fermo e gpsMoving, passa a modalità risparmio
+          if(gpsMoving&&stTimer)startWatch(false);
         } else {
-          myLat=lat;myLon=lon;myAcc=acc;
+          clearTimeout(stTimer);stTimer=null;
+          // Era fermo, ora si muove: torna ad alta frequenza
+          if(!gpsMoving)startWatch(true);
         }
-        gpsTs=Date.now();
-        dot.className=myAcc>100?'gdot old':'gdot ok';
-        lbl.textContent='GPS ±'+myAcc+'m';
-        publishPos();
-      },()=>{
-        myLat=lat;myLon=lon;myAcc=acc;
-        dot.className='gdot old';lbl.textContent='GPS ±'+acc+'m';
-        publishPos();
-      },{enableHighAccuracy:false,maximumAge:30000,timeout:8000});
-    } else {
-      myLat=lat;myLon=lon;myAcc=acc;
-      dot.className='gdot ok';lbl.textContent='GPS ±'+acc+'m';
-      publishPos();
-    }
-  },err=>{
-    dot.className='gdot old';
-    lbl.textContent=myLat?'GPS ±'+(myAcc||'?')+'m':'GPS off';
-  },{enableHighAccuracy:true,maximumAge:20000,timeout:18000});
+      }
+      myLat=lat;myLon=lon;myAcc=acc;publishPos();
+    },()=>{document.getElementById('gdot').className='gdot';document.getElementById('glbl').textContent='GPS off';},opts);
+  }
+  startWatch(true);
 }
-
-// Tap sul dot "Io" → aggiornamento immediato
-function forceGpsUpdate(){
-  if(!navigator.geolocation)return;
-  const dot=document.getElementById('gdot'),lbl=document.getElementById('glbl');
-  dot.className='gdot wait';lbl.textContent='GPS aggiornamento...';
-  showToast('📡 Aggiornamento posizione…');
-  navigator.geolocation.getCurrentPosition(pos=>{
-    const lat=pos.coords.latitude,lon=pos.coords.longitude,acc=Math.round(pos.coords.accuracy);
-    gpsTs=Date.now();dot.className='gdot ok';lbl.textContent='GPS ±'+acc+'m';
-    myLat=lat;myLon=lon;myAcc=acc;
-    publishPos();
-    showToast('✅ Posizione aggiornata ±'+acc+'m');
-  },()=>{showToast('⚠️ Fix GPS fallito');dot.className='gdot old';},
-  {enableHighAccuracy:true,maximumAge:0,timeout:20000}); // maximumAge:0 = fix fresco obbligatorio
-}
-// ── BUSSOLA ──
-// compassHeading = heading corrente (0=Nord, 90=Est, 180=Sud, 270=Ovest)
-// compassActive = true se il sensore sta inviando dati
-
-function compassHandler(e){
+function onOrient(e){
   let h=null;
-  if(typeof e.webkitCompassHeading==='number'&&!isNaN(e.webkitCompassHeading)){
+  if(e.webkitCompassHeading!=null){
+    // iOS: heading diretto, 0=Nord, crescente in senso orario ✓
     h=e.webkitCompassHeading;
-  } else if(typeof e.alpha==='number'&&!isNaN(e.alpha)){
-    h=(360-e.alpha+360)%360;
+  } else if(e.absolute && e.alpha!=null){
+    // Android deviceorientationabsolute: alpha cresce in senso ANTIORARIO
+    // quindi l'heading reale = (360 - alpha) % 360
+    h=(360-e.alpha)%360;
   }
-  if(h===null)return;
-
-  // Buffer mediana circolare — elimina spike e tremore del sensore
-  headingBuf.push(h);
-  if(headingBuf.length>HEADING_BUF_SIZE)headingBuf.shift();
-
-  // Mediana su dati circolari: normalizza intorno al primo valore
-  const ref=headingBuf[0];
-  const norm=headingBuf.map(v=>{let d=v-ref;while(d>180)d-=360;while(d<-180)d+=360;return d;});
-  norm.sort((a,b)=>a-b);
-  const median=(norm[Math.floor(norm.length/2)]+norm[Math.ceil(norm.length/2)])/2;
-  rawHeading=((ref+median)%360+360)%360;
-
-  if(!compassActive){
-    compassActive=true;
-    compassHeading=rawHeading;
-    document.getElementById('compass-btn').style.color='var(--green)';
-  }
-}
-
-function startCompassDirect(){
-  window.addEventListener('deviceorientationabsolute',compassHandler,true);
-  window.addEventListener('deviceorientation',compassHandler,true);
+  if(h!=null) rawHeading=h;
 }
 
 async function requestCompassPermission(){
+  // iOS 13+ richiede permesso esplicito per i sensori di movimento
   if(typeof DeviceOrientationEvent!=='undefined' &&
      typeof DeviceOrientationEvent.requestPermission==='function'){
-    // iOS 13+ — DEVE essere chiamato da un tap utente
     try{
-      const res=await DeviceOrientationEvent.requestPermission();
-      if(res==='granted') startCompassDirect();
-      else showToast('⚠️ Permesso bussola negato');
-    }catch(err){showToast('⚠️ Bussola non disponibile');}
+      const state=await DeviceOrientationEvent.requestPermission();
+      if(state==='granted'){
+        window.addEventListener('deviceorientationabsolute',onOrient,true);
+        window.addEventListener('deviceorientation',onOrient,true);
+      }
+    }catch(e){}
   } else {
-    startCompassDirect();
+    // Android / altri: permesso non richiesto
+    window.addEventListener('deviceorientationabsolute',onOrient,true);
+    window.addEventListener('deviceorientation',onOrient,true);
   }
 }
 
 setInterval(()=>{
   if(!gpsTs||!myLat)return;
-  const age=Date.now()-gpsTs;
-  if(age>GPS_INTERVAL*1.5){
-    document.getElementById('gdot').className='gdot old';
-    document.getElementById('glbl').textContent='GPS vecchio';
-  }
+  if((Date.now()-gpsTs)>30000){document.getElementById('gdot').className='gdot old';document.getElementById('glbl').textContent='GPS vecchio ±'+(myAcc||'?')+'m';}
 },5000);
 
 
@@ -852,7 +680,7 @@ function connectMQTT(){
       if(!friends[uid2])friends[uid2]={id:uid2,lat:null,lon:null,ts:0};
       if(type==='member'){
         if(data.online===false){delete friends[uid2];delete predMap[uid2];}
-        else Object.assign(friends[uid2],{name:data.name,color:data.color,id:uid2});
+        else Object.assign(friends[uid2],{name:data.name,color:data.color,id:uid2});if(data.groupName&&!groupName){groupName=data.groupName;document.getElementById('gnm').textContent=groupName;}
       }else if(type==='pos'){
         if(friends[uid2]&&friends[uid2].lat!==null)predMap[uid2]={lat:friends[uid2].lat,lon:friends[uid2].lon,ts:friends[uid2].ts||0};
         Object.assign(friends[uid2],{lat:data.lat,lon:data.lon,ts:data.ts,acc:data.acc});
@@ -878,8 +706,17 @@ function connectMQTT(){
   });
   mqttClient.on('offline',()=>showToast('⚠️ Connessione persa…'));
 }
-function publishMember(){if(!mqttClient)return;mqttClient.publish(`fc/${groupId}/member/${myId}`,JSON.stringify({name:myName,color:myColor,online:true}),{retain:true,qos:1});}
-function publishPos(){if(!mqttClient||myLat===null)return;mqttClient.publish(`fc/${groupId}/pos/${myId}`,JSON.stringify({lat:myLat,lon:myLon,ts:Date.now(),acc:myAcc}),{retain:true,qos:0});}
+function publishMember(){if(!mqttClient)return;const payload={name:myName,color:myColor,online:true};if(groupName)payload.groupName=groupName;mqttClient.publish(`fc/${groupId}/member/${myId}`,JSON.stringify(payload),{retain:true,qos:1});}
+function publishPos(){
+  if(!mqttClient||myLat===null)return;
+  // Rate limiting: pubblica solo se spostato ≥5m dall'ultimo invio
+  if(lastPubLat!==null){
+    const moved=distBear(lastPubLat,lastPubLon,myLat,myLon).dist;
+    if(moved<5)return;
+  }
+  lastPubLat=myLat;lastPubLon=myLon;
+  mqttClient.publish(`fc/${groupId}/pos/${myId}`,JSON.stringify({lat:myLat,lon:myLon,ts:Date.now(),acc:myAcc}),{retain:true,qos:0});
+}
 function removeMQTT(){if(!mqttClient)return;const e=new Uint8Array(0);mqttClient.publish(`fc/${groupId}/member/${myId}`,e,{retain:true,qos:1});mqttClient.publish(`fc/${groupId}/pos/${myId}`,e,{retain:true,qos:1});mqttClient.end();}
 
 // ══════════════════════════════════
@@ -1013,11 +850,30 @@ document.addEventListener('click',e=>{
 // ══════════════════════════════════
 // SEPARAZIONE
 // ══════════════════════════════════
+let warnDismissed=false;
+function dismissWarn(){warnDismissed=true;document.getElementById('warn').classList.remove('show');}
+const sepNotified={};  // tiene traccia di chi ha già ricevuto notifica
 function checkSep(){
   if(myLat===null)return;
-  let w=false;Object.values(friends).forEach(f=>{if(f.lat&&distBear(myLat,myLon,f.lat,f.lon).dist>SEP_THR)w=true;});
-  document.getElementById('warn').classList.toggle('show',w);
-  if(w&&navigator.vibrate)navigator.vibrate([200,100,200]);
+  let w=false;
+  Object.values(friends).forEach(f=>{
+    if(!f.lat)return;
+    const {dist,bearing}=distBear(myLat,myLon,f.lat,f.lon);
+    if(dist>SEP_THR){
+      w=true;
+      if(!sepNotified[f.id]){
+        sepNotified[f.id]=true;
+        const dir=cardinal(bearing);
+        const km=(dist/1000).toFixed(1);
+        addNotification(`📍 ${f.name||'Amico'} si è allontanato — ${km}km a ${dir}`,new Date());
+      }
+    } else {
+      sepNotified[f.id]=false;  // reset: potrà notificare di nuovo se si riallontana
+    }
+  });
+  if(!w) warnDismissed=false;
+  if(!warnDismissed) document.getElementById('warn').classList.toggle('show',w);
+  if(w&&!warnDismissed&&navigator.vibrate)navigator.vibrate([200,100,200]);
 }
 
 // ══════════════════════════════════
@@ -1048,42 +904,14 @@ function renderLista(){
   }).join('');
 }
 
-
-// ══ LOCALIZER ════════════════════════════════════════════════════════════════
-function selectFriend(id){
-  selectedFriendId=id;
-  const f=friends[id]; if(!f)return;
-  const col=f.color||'#00c0ff';
-  document.getElementById('lc-dot').style.background=col;
-  document.getElementById('lc-name').textContent=f.name||'Amico';
-  document.getElementById('lc-name').style.color=col;
-  document.getElementById('loc-bar').classList.add('show');
-  showToast('📍 '+f.name);
-}
-function deselectFriend(){
-  selectedFriendId=null;
-  document.getElementById('loc-bar').classList.remove('show');
-}
-// ═════════════════════════════════════════════════════════════════════════════
-
 // ══════════════════════════════════
 // SHARE
 // ══════════════════════════════════
 function getUrl(){const o=location.origin;if(!o||o==='null'||o.startsWith('file'))return null;return o+location.pathname+'?group='+groupId;}
-function shareWA(){
-  const url=getUrl();
-  // Messaggio con link su riga separata — WhatsApp lo rende cliccabile con anteprima
-  const msg=url
-    ? '🧭 *Friend Compass* — Seguiamoci al festival!\n'
-    + 'Unisciti al gruppo *'+groupId+'*\n\n'
-    + url
-    : '🧭 *Friend Compass*\nCodice gruppo: *'+groupId+'*\n\nAprilo su: https://'+location.host+location.pathname;
-  // Sempre wa.me diretto — niente navigator.share che perde il testo
-  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
-}
+function shareWA(){const url=getUrl();const msg=url?'📡 *Radar Fest*\nUnisciti al gruppo *'+groupId+'*!\n\n'+url:'📡 *Radar Fest*\nCodice: *'+groupId+'*';if(navigator.share&&url)navigator.share({title:'Radar Fest',url}).catch(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'));else window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');}
 function copyLink(){const url=getUrl();if(!url){showToast('⚠️ Serve HTTPS');return;}navigator.clipboard?.writeText(url);showToast('🔗 Link copiato!');}
 function copyCode(){navigator.clipboard?.writeText(groupId);showToast('📋 Codice: '+groupId);}
-function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsInterval)clearInterval(gpsInterval);gpsInterval=null;removeMQTT();friends={};predMap={};smoothFriendPos={};displayFriendPos={};deselectFriend?.();show('s-landing');groupId=null;}
+function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsWatch)navigator.geolocation.clearWatch(gpsWatch);removeMQTT();friends={};predMap={};smoothFriendPos={};show('s-landing');groupId=null;}
 
 // ══════════════════════════════════
 // TOAST
