@@ -12,11 +12,12 @@
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Segoe UI',Roboto,sans-serif;overflow:hidden}
 body{display:flex;flex-direction:column}
 .screen{display:none;flex-direction:column;flex:1;overflow:hidden}
+#s-landing,#s-name{overflow-y:auto!important;-webkit-overflow-scrolling:touch;}
 .screen.active{display:flex}
 /* LANDING */
-#s-landing{align-items:center;justify-content:center;gap:16px;padding:28px 20px;overflow-y:auto}
+#s-landing{align-items:center;justify-content:flex-start;gap:16px;padding:max(28px,calc(env(safe-area-inset-top,0px) + 16px)) 20px calc(28px + env(safe-area-inset-bottom,0px));overflow-y:auto;-webkit-overflow-scrolling:touch}
 .logo{font-size:56px}.title{font-size:24px;font-weight:800}.sub{font-size:12px;color:var(--dim)}
-.card{background:var(--bg2);border:1px solid var(--ring);border-radius:16px;padding:18px 20px;width:100%;max-width:360px}
+.card{background:var(--bg2);border:1px solid var(--ring);border-radius:16px;padding:18px 20px;width:100%;max-width:360px;box-sizing:border-box}
 .ct{font-size:13px;font-weight:700;color:var(--cyan);margin-bottom:12px}
 .field{width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--ring);border-radius:10px;
        color:var(--text);font-size:14px;outline:none;margin-bottom:10px;font-family:inherit}
@@ -26,7 +27,7 @@ body{display:flex;flex-direction:column}
 .btn-ghost{background:transparent;border:1px solid var(--ring);color:var(--dim);margin-top:8px}
 .hint{color:var(--dim);font-size:11px;text-align:center}
 /* NOME */
-#s-name{align-items:center;justify-content:center;padding:24px 20px}
+#s-name{align-items:center;justify-content:flex-start;padding:max(24px,calc(env(safe-area-inset-top,0px)+12px)) 20px calc(24px + env(safe-area-inset-bottom,0px));overflow-y:auto;-webkit-overflow-scrolling:touch}
 #s-name .card{max-width:360px}
 .crow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;justify-content:center}
 .sw{width:34px;height:34px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:transform .15s}
@@ -119,6 +120,13 @@ body{display:flex;flex-direction:column}
       color:#fff;padding:7px 12px;font-size:12px;font-weight:700;display:none;z-index:997;
       align-items:center;justify-content:center;gap:4px}
 #warn.show{display:flex}
+
+/* centra landing se c'è spazio, scrolla se è troppo piccolo */
+#s-landing > * { flex-shrink: 0; }
+@media (min-height: 560px) {
+  #s-landing { justify-content: center; }
+}
+
 </style>
 </head>
 <body>
@@ -876,7 +884,7 @@ function renderLista(){
 // SHARE
 // ══════════════════════════════════
 function getUrl(){const o=location.origin;if(!o||o==='null'||o.startsWith('file'))return null;return o+location.pathname+'?group='+groupId;}
-function shareWA(){const url=getUrl();const msg=url?'🧭 *Radar Fest*\nUnisciti al gruppo *'+groupId+'*!\n\n'+url:'🧭 *Radar Fest*\nCodice: *'+groupId+'*';if(navigator.share&&url)navigator.share({title:'Radar Fest',url}).catch(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'));else window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');}
+function shareWA(){const url=getUrl();const msg=url?'📡 *Radar Fest*\nUnisciti al gruppo *'+groupId+'*!\n\n'+url:'📡 *Radar Fest*\nCodice: *'+groupId+'*';if(navigator.share&&url)navigator.share({title:'Radar Fest',url}).catch(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'));else window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');}
 function copyLink(){const url=getUrl();if(!url){showToast('⚠️ Serve HTTPS');return;}navigator.clipboard?.writeText(url);showToast('🔗 Link copiato!');}
 function copyCode(){navigator.clipboard?.writeText(groupId);showToast('📋 Codice: '+groupId);}
 function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsWatch)navigator.geolocation.clearWatch(gpsWatch);removeMQTT();friends={};predMap={};smoothFriendPos={};show('s-landing');groupId=null;}
