@@ -581,6 +581,32 @@ prevSweepAngle=sweepAngle;
 }
 
 // ══════════════════════════════════
+
+// ══════════════════════════════════
+// ZOOM
+// ══════════════════════════════════
+function updateZoomUI(){
+  const lbl=document.getElementById('zoom-lbl');
+  if(lbl) lbl.textContent=MAX_R+' m';
+  const btnIn=document.getElementById('zoom-in');
+  const btnOut=document.getElementById('zoom-out');
+  if(btnIn)  btnIn.disabled=(zoomIdx<=0);
+  if(btnOut) btnOut.disabled=(zoomIdx>=ZOOM_LEVELS.length-1);
+}
+function zoomIn(){
+  if(zoomIdx>0){zoomIdx--;MAX_R=ZOOM_LEVELS[zoomIdx];updateZoomUI();}
+}
+function zoomOut(){
+  if(zoomIdx<ZOOM_LEVELS.length-1){zoomIdx++;MAX_R=ZOOM_LEVELS[zoomIdx];updateZoomUI();}
+}
+// Doppio tap canvas → reset zoom
+let _lastTap=0;
+document.getElementById('cv').addEventListener('touchend',function(){
+  const now=Date.now();
+  if(now-_lastTap<320){zoomIdx=0;MAX_R=ZOOM_LEVELS[0];updateZoomUI();showToast('Zoom resettato');}
+  _lastTap=now;
+},{passive:true});
+
 // LOOP
 // ══════════════════════════════════
 let prevT=0;
