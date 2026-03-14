@@ -214,8 +214,7 @@ body{transition:filter .3s;}
   position:absolute;top:10px;left:14px;z-index:10;
   background:rgba(10,26,42,0.88);border:2px solid var(--ring);border-radius:50%;
   width:40px;height:40px;display:flex;align-items:center;justify-content:center;
-  cursor:pointer;padding:2px;line-height:0;
-  transition:background .15s,border-color .15s,box-shadow .15s;}
+  cursor:pointer;padding:2px;line-height:0;transition:background .15s;}
 #bright-btn:active{background:rgba(0,192,255,0.18);}
 
 /* TIMER GRUPPO */
@@ -359,7 +358,7 @@ const SEP_THR=2000;
 const ZOOM_LEVELS=[200,100,50,20,10];
 let zoomIdx=0;
 let MAX_R=ZOOM_LEVELS[zoomIdx];
-const SOS_DURATION=60;  // 1 minuto
+const SOS_DURATION=120; // 2 minuti — tempo per accendere schermo
 
 // ══════════════════════════════════
 // STATO
@@ -375,7 +374,7 @@ let gpsWatch=null,stTimer=null,mqttClient=null;
 let notifications=[];
 let sosTimer=null,sosAudioCtx=null,sosVibInterval=null,sosAudioInterval=null,sosCountdown=SOS_DURATION;
 let _keepaliveAudio=null,_sosBeepAudio=null,_sosNotifIv=null;
-let _swReg=null,_swKaIv=null,_autoGpsIv=null;
+let _swReg=null,_swKaIv=null,_autoGpsIv=null,_wakeLockIv=null;
 let _pinVis="public";
 let sosFromId=null,sosFromPos=null,sosCdInterval=null,sosActiveId=null;
 let rawHeading=0,compassHeading=0; // solo per la freccia nord, non per il radar
@@ -565,7 +564,7 @@ function enterGroup(){
   // Blocca rotazione in portrait
   try{screen.orientation.lock('portrait').catch(()=>{});}catch(e){}
   loadPins();
-  if('wakeLock' in navigator){navigator.wakeLock.request('screen').catch(()=>{});}
+  _requestWakeLock();
   brightIdx=1;applyBrightness();
   _startAutoGps();
   setTimeout(()=>document.getElementById("sos-perm-overlay").classList.add("show"),1200);
@@ -1137,6 +1136,7 @@ function selfDestructClean(){
   _stopSOSBeep();_stopSOSRing();
   if(_swKaIv){clearInterval(_swKaIv);_swKaIv=null;}
   if(_autoGpsIv){clearInterval(_autoGpsIv);_autoGpsIv=null;}
+  if(_wakeLockIv){clearInterval(_wakeLockIv);_wakeLockIv=null;}
   if(_keepaliveAudio){_keepaliveAudio.pause();_keepaliveAudio=null;}
   // Cancella retained propri dal broker
   if(mqttClient){
@@ -1363,7 +1363,7 @@ setInterval(()=>{
 // MQTT
 // ══════════════════════════════════
 function connectMQTT(){
-  mqttClient=mqtt.connect(BROKER,{clientId:'fc_'+myId,clean:true,reconnectPeriod:3000,keepalive:30});
+  mqttClient=mqtt.connect(BROKER,{clientId:'fc_'+myId,clean:false,reconnectPeriod:3000,keepalive:60});
   mqttClient.on('connect',()=>{
     mqttClient.subscribe(`fc/${groupId}/#`);
     publishMember();
@@ -1436,9 +1436,12 @@ function connectMQTT(){
         updateSmoothedPos(uid2,data.lat,data.lon,data.acc);
         checkSep();
       }else if(type==='sos'){
-        // Ricevo SOS da un amico
+        // Ricevo SOS da un amico — ignora se retain scaduto
         const nm=data.name||friends[uid2]?.name||'Un amico';
-        startSOSAlert(nm,uid2);
+        const sosAge=(Date.now()-(data.ts||0))/1000;
+        if(!data.ts || sosAge < SOS_DURATION){
+          startSOSAlert(nm,uid2);
+        }
       }else if(type==='sosack'){
         // Ferma l'alert SOS su TUTTI i dispositivi del gruppo
         if(sosActiveId){
@@ -1492,7 +1495,7 @@ function removeMQTT(){
 function triggerSOS(){
   if(!confirm('🚨 Inviare SOS a tutti gli amici del gruppo?\n\nUsare solo in caso di emergenza reale.'))return;
   if(!mqttClient){showToast('⚠️ Non connesso');return;}
-  mqttClient.publish(`fc/${groupId}/sos/${myId}`,JSON.stringify({name:myName,ts:Date.now()}),{retain:false,qos:1});
+  mqttClient.publish(`fc/${groupId}/sos/${myId}`,JSON.stringify({name:myName,ts:Date.now()}),{retain:true,qos:1});
   document.getElementById('sosB').classList.add('active');
   document.getElementById('sosB').textContent='🆘 SOS inviato';
   showToast('🚨 SOS inviato a tutti!');
@@ -1543,6 +1546,8 @@ function stopSOSAlert(){
       JSON.stringify({name:myName,target:sosFromId,ts:Date.now()}),
       {retain:false,qos:1}
     );
+    // Pulisce il retain SOS del mittente (evita ricezione dopo riconnessione)
+    mqttClient.publish(`fc/${groupId}/sos/${sosFromId}`,'',{retain:true,qos:1});
   }
   sosFromId=null;sosFromPos=null;sosActiveId=null;
 }
@@ -1725,10 +1730,10 @@ window.addEventListener('DOMContentLoaded',()=>{
 });
 
 // ══════════════════════════════════════════════════════════════════════
-// SOS — SCHERMO SPENTO: audio 40Hz quasi inaudibile + MediaSession API
-// Chrome Android non sospende mai le pagine con media session attiva
+// SOS SYSTEM — 3 livelli di affidabilità
 // ══════════════════════════════════════════════════════════════════════
 
+// ── WAV generator ────────────────────────────────────────────────────
 function _mkWav(freq,secs,vol){
   const sr=22050,n=Math.floor(sr*secs),buf=new ArrayBuffer(44+n*2),v=new DataView(buf);
   const ws=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));
@@ -1738,57 +1743,51 @@ function _mkWav(freq,secs,vol){
   ws(36,'data');v.setUint32(40,n*2,true);
   for(let i=0;i<n;i++){
     const t=i/sr,fade=Math.min(1,Math.min(i,n-i)/(sr*0.01));
-    // 40Hz quasi inaudibile — mantiene sessione media attiva
     const s=Math.round(fade*vol*32000*Math.sin(2*Math.PI*freq*t));
     v.setInt16(44+i*2,s,true);
   }
   return URL.createObjectURL(new Blob([buf],{type:'audio/wav'}));
 }
 
+// ── LIVELLO 2: Audio 40Hz + MediaSession (background schermo acceso) ─
 function _setupMediaSession(){
-  if(!('mediaSession' in navigator)) return;
-  // Registra l'app come player Android → Chrome non viene mai sospeso
+  if(!('mediaSession' in navigator))return;
   navigator.mediaSession.metadata=new MediaMetadata({
     title:'Radar Fest — SOS Attivo',
     artist:'In ascolto emergenze nel gruppo',
     album:groupId||'Gruppo'
   });
-  // Handler obbligatori per mantenere la sessione attiva
-  ['play','pause','stop'].forEach(a=>{
-    try{navigator.mediaSession.setActionHandler(a,()=>{});}catch(e){}
-  });
+  ['play','pause','stop'].forEach(a=>{try{navigator.mediaSession.setActionHandler(a,()=>{});}catch(e){}});
   navigator.mediaSession.playbackState='playing';
 }
 
 function _unlockAudio(){
-  if(_keepaliveAudio) return;
-  // 40Hz @ volume 0.02 — quasi inaudibile ma sufficiente per media session
-  _keepaliveAudio=new Audio(_mkWav(40,4,0.02));
+  if(_keepaliveAudio)return;
+  // 40Hz @ vol 0.03 — quasi inaudibile ma mantiene media session attiva
+  _keepaliveAudio=new Audio(_mkWav(40,4,0.03));
   _keepaliveAudio.loop=true;
-  _keepaliveAudio.volume=0.02;
+  _keepaliveAudio.volume=0.03;
   _keepaliveAudio.play()
     .then(()=>{
       _setupMediaSession();
-      showToast('✅ SOS schermo spento attivo');
+      showToast('✅ SOS attivo — schermo spento OK');
     })
-    .catch(e=>showToast('⚠️ Audio: '+e.message));
-  // Riattiva se sospesa
+    .catch(e=>showToast('⚠️ Audio non sbloccato: '+e.message));
+  // Riattiva automaticamente se il browser la mette in pausa
   _keepaliveAudio.addEventListener('pause',()=>{
-    if(_keepaliveAudio) _keepaliveAudio.play().catch(()=>{});
+    setTimeout(()=>{if(_keepaliveAudio)_keepaliveAudio.play().catch(()=>{});},500);
   });
 }
 
 function _startSOSBeep(){
-  if(_sosBeepAudio) return;
+  if(_sosBeepAudio)return;
   _sosBeepAudio=new Audio(_mkWav(880,0.4,0.9));
-  _sosBeepAudio.loop=true; _sosBeepAudio.volume=1.0;
+  _sosBeepAudio.loop=true;_sosBeepAudio.volume=1.0;
   _sosBeepAudio.play().catch(()=>{});
 }
-function _stopSOSBeep(){
-  if(_sosBeepAudio){_sosBeepAudio.pause();_sosBeepAudio=null;}
-}
+function _stopSOSBeep(){if(_sosBeepAudio){_sosBeepAudio.pause();_sosBeepAudio=null;}}
 
-// ── Notifiche sistema (vibrazione lock screen) ──────────────────────
+// ── Notifiche sistema ─────────────────────────────────────────────────
 const _SW_CODE=`
 self.addEventListener('install',()=>self.skipWaiting());
 self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
@@ -1798,8 +1797,7 @@ self.addEventListener('notificationclick',e=>{
     const w=cs.find(c=>c.url&&c.url.startsWith(self.location.origin));
     return w?w.focus():self.clients.openWindow('/');
   }));
-});
-`;
+});`;
 async function _initSW(){
   if(!('serviceWorker'in navigator)||_swReg)return;
   try{
@@ -1809,7 +1807,6 @@ async function _initSW(){
       URL.createObjectURL(new Blob([_SW_CODE],{type:'application/javascript'})));
   }catch(e){_swReg=null;}
 }
-
 const _SOS_ICO='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
   +'<rect width="64" height="64" rx="12" fill="#cc0022"/>'
@@ -1834,13 +1831,12 @@ function _stopSOSRing(){
   _swReg?.getNotifications({tag:'sos-ring'}).then(ns=>ns.forEach(n=>n.close())).catch(()=>{});
 }
 
-// ── Dialog SOS ──────────────────────────────────────────────────────
+// ── Dialog ────────────────────────────────────────────────────────────
 function acceptSOSPerm(){
   document.getElementById('sos-perm-overlay').classList.remove('show');
-  _unlockAudio(); // GESTO UTENTE → sblocca audio + MediaSession
-  if(Notification.permission==='granted'){
-    _initSW();
-  } else if('Notification'in window){
+  _unlockAudio();
+  if(Notification.permission==='granted'){_initSW();}
+  else if('Notification'in window){
     Notification.requestPermission().then(p=>{
       if(p==='granted')_initSW();
       else showToast('Notifiche negate: SOS suona solo con app aperta');
@@ -1852,21 +1848,41 @@ function denySOSPerm(){
   showToast('SOS attivo solo con app aperta');
 }
 
-// ── Riconnessione MQTT quando torna in foreground ───────────────────
+// ── LIVELLO 3: Wake Lock aggressivo — ri-richiesto quando rilasciato ──
+let _wl=null;
+async function _requestWakeLock(){
+  if(!('wakeLock'in navigator))return;
+  try{
+    _wl=await navigator.wakeLock.request('screen');
+    _wl.addEventListener('release',()=>{
+      // Il sistema ha rilasciato il wake lock (es. schermo si stava spegnendo)
+      // Riprova subito
+      setTimeout(_requestWakeLock,500);
+    });
+  }catch(e){}
+  // Rinforza ogni 25s (prima che scadano i 30s di inattività)
+  if(!_wakeLockIv){
+    _wakeLockIv=setInterval(async()=>{
+      if(_wl&&_wl.released){await _requestWakeLock();}
+      if(_keepaliveAudio&&_keepaliveAudio.paused){
+        _keepaliveAudio.play().catch(()=>{});
+        _setupMediaSession();
+      }
+    },25000);
+  }
+}
+
+// ── Riconnessione MQTT quando l'app torna in foreground ──────────────
 document.addEventListener('visibilitychange',()=>{
-  if(document.hidden) return;
-  // Rientra in foreground: verifica connessione MQTT
-  if(mqttClient && !mqttClient.connected){
-    mqttClient.reconnect();
-  }
-  // Riattiva audio keepalive se era stato sospeso
-  if(_keepaliveAudio && _keepaliveAudio.paused){
-    _keepaliveAudio.play().catch(()=>{});
-    _setupMediaSession();
-  }
+  if(document.hidden)return;
+  // Rientra in foreground: ripristina tutto
+  if(mqttClient&&!mqttClient.connected)mqttClient.reconnect();
+  if(_keepaliveAudio&&_keepaliveAudio.paused)_keepaliveAudio.play().catch(()=>{});
+  _setupMediaSession();
+  _requestWakeLock();
 });
 
-// ── Auto-GPS 45s ────────────────────────────────────────────────────
+// ── Auto-GPS 45s ───────────────────────────────────────────────────────
 function _startAutoGps(){
   if(_autoGpsIv)clearInterval(_autoGpsIv);
   _autoGpsIv=setInterval(()=>{
@@ -1882,7 +1898,6 @@ function _startAutoGps(){
   },45000);
 }
 
-// ── selPinVis ────────────────────────────────────────────────────────
 function selPinVis(v,btn){
   _pinVis=v;
   document.querySelectorAll('.pin-vis-btn').forEach(b=>b.classList.remove('sel'));
@@ -1951,7 +1966,6 @@ function selPinVis(v,btn){
     Torna alla home
   </button>
 </div>
-<!-- DIALOG SOS -->
 <div id="sos-perm-overlay">
   <div id="sos-perm-box">
     <div class="spb-icon">🆘</div>
