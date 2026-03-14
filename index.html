@@ -140,7 +140,7 @@ body{display:flex;flex-direction:column}
   transition:background .15s;z-index:10;
 }
 .zoom-btn:active{background:rgba(0,192,255,0.18);}
-.zoom-btn:disabled{opacity:0.3;pointer-events:none;cursor:default;}
+.zoom-btn:disabled{opacity:0.3;cursor:default;}
 #zoom-out{left:14px;}
 #zoom-in{right:14px;}
 #zoom-lbl{
@@ -234,7 +234,7 @@ body{display:flex;flex-direction:column}
 <div class="screen" id="s-radar">
   <div id="topbar">
     <div class="gdot wait" id="gdot"></div>
-    <div class="glbl" id="glbl">GPS...</div>
+    <div class="glbl" id="glbl" onclick="refreshMyPos()" style="cursor:pointer" title="Tocca per aggiornare">GPS...</div>
     <div class="dvd"></div>
     <div class="gnm" id="gnm">Gruppo</div>
     <div class="cbdg" id="cbdg" onclick="copyCode()">—</div>
@@ -310,6 +310,7 @@ const SOS_DURATION=120; // secondi
 // ══════════════════════════════════
 let selColor=COLORS[1],myId=null,myName='',myColor=COLORS[1],groupId=null;
 let myLat=null,myLon=null,myAcc=null,gpsTs=0;
+let myJoinTs=0; // timestamp ingresso nel gruppo
 let groupName='';
 let lastPubLat=null,lastPubLon=null;  // rate limiting publish
 let gpsMoving=true;  // GPS adattivo
@@ -496,6 +497,7 @@ function enterGroup(){
   document.getElementById('cbdg').textContent=groupId;
   document.getElementById('gnm').textContent=groupName||('Gruppo '+groupId);
   setTimeout(fixCanvas,50);
+  myJoinTs=Date.now();
   connectMQTT();startGps();
   setTimeout(republishAllPins,3000);
   requestCompassPermission();
@@ -767,13 +769,7 @@ function zoomIn(){
 function zoomOut(){
   if(zoomIdx>0){zoomIdx--;MAX_R=ZOOM_LEVELS[zoomIdx];updateZoomUI();}
 }
-// Doppio tap canvas → reset zoom
-let _lastTap=0;
-document.getElementById('cv').addEventListener('touchend',function(){
-  const now=Date.now();
-  if(now-_lastTap<320){zoomIdx=0;MAX_R=ZOOM_LEVELS[0];updateZoomUI();showToast('Zoom resettato');}
-  _lastTap=now;
-},{passive:true});
+// (zoom reset: tap su area libera del radar)
 
 
 // ══════════════════════════════════════════
@@ -863,6 +859,23 @@ function republishAllPins(){
   pins.filter(p=>p.ownerId===myId).forEach(p=>publishPin(p));
 }
 
+
+function refreshMyPos(){
+  if(!navigator.geolocation){ showToast('⚠️ GPS non disponibile'); return; }
+  const dot=document.getElementById('gdot'), lbl=document.getElementById('glbl');
+  dot.className='gdot wait'; lbl.textContent='Aggiornamento…';
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const lat=pos.coords.latitude, lon=pos.coords.longitude, acc=Math.round(pos.coords.accuracy);
+    myLat=lat; myLon=lon; myAcc=acc; gpsTs=Date.now();
+    dot.className='gdot ok'; lbl.textContent='GPS ±'+acc+'m';
+    publishPos();
+    showToast('📍 Posizione aggiornata ±'+acc+'m');
+  }, ()=>{
+    dot.className='gdot'; lbl.textContent='GPS off';
+    showToast('⚠️ Impossibile aggiornare GPS');
+  }, {enableHighAccuracy:true, maximumAge:0, timeout:10000});
+}
+
 // (pin aperto tramite bottone topbar 📍)
 
 
@@ -931,6 +944,14 @@ cv.addEventListener('click', function(e) {
   const mx=(e.clientX-rect.left)*scaleX, my=(e.clientY-rect.top)*scaleY;
   const W=cv.width,H=cv.height,cx=W/2,cy=H/2;
   const R=Math.min(W,H)/2-14;
+
+  // Tap sul proprio pallino (centro) → aggiorna posizione GPS
+  if(Math.hypot(mx-cx,my-cy)<22){
+    refreshMyPos();
+    return;
+  }
+
+  // Tap su pallino amico
   let hit=null;
   Object.values(friends).forEach(f=>{
     if(f.lat==null||myLat==null) return;
@@ -941,7 +962,25 @@ cv.addEventListener('click', function(e) {
     const fx=cx+r*Math.cos(ar), fy=cy+r*Math.sin(ar);
     if(Math.hypot(mx-fx,my-fy)<24) hit=f.id;
   });
-  selectedFriendId=(hit&&hit!==selectedFriendId)?hit:null;
+  if(hit){ selectedFriendId=(hit!==selectedFriendId)?hit:null; return; }
+
+  // Tap su icona pin
+  let hitPin=false;
+  if(myLat!==null) pins.forEach(p=>{
+    if(p.lat===null) return;
+    const {dist,bearing}=distBear(myLat,myLon,p.lat,p.lon);
+    const rr=R*Math.min(dist/MAX_R,0.93);
+    const ar=d2r(bearing-compassHeading)-Math.PI/2;
+    const px2=cx+rr*Math.cos(ar), py2=cy+rr*Math.sin(ar);
+    if(Math.hypot(mx-px2,my-py2)<20) hitPin=true;
+  });
+  if(hitPin) return;
+
+  // Tap su area libera → reset zoom
+  if(zoomIdx>0){
+    zoomIdx=0; MAX_R=ZOOM_LEVELS[0]; updateZoomUI();
+    showToast('Zoom resettato');
+  }
 });
 
 // ══════════════════════════════════
@@ -1047,9 +1086,13 @@ function connectMQTT(){
         else{
           Object.assign(friends[uid2],{name:data.name,color:data.color,id:uid2});
           if(data.groupName&&!groupName){groupName=data.groupName;document.getElementById('gnm').textContent=groupName;}
-          // Conflitto nome: stesso nome, ID diverso → forza cambio nome
+          // Conflitto nome: stesso nome, ID diverso
           if(data.name&&myName&&data.name.trim().toLowerCase()===myName.trim().toLowerCase()&&uid2!==myId){
-            handleNameConflict();
+            // Chi ha joinTs minore era già nel gruppo → noi dobbiamo cedere
+            const theirTs = data.joinTs||0;
+            const weAreNewer = myJoinTs > theirTs || (myJoinTs===theirTs && myId > uid2);
+            if(weAreNewer) handleNameConflict();
+            // altrimenti siamo noi i precedenti → l'altro si adeguerà
           }
         }
       }else if(type==='pos'){
@@ -1085,7 +1128,7 @@ function connectMQTT(){
   });
   mqttClient.on('offline',()=>showToast('⚠️ Connessione persa…'));
 }
-function publishMember(){if(!mqttClient)return;saveIdentity();const payload={name:myName,color:myColor,online:true};if(groupName)payload.groupName=groupName;mqttClient.publish(`fc/${groupId}/member/${myId}`,JSON.stringify(payload),{retain:true,qos:1});}
+function publishMember(){if(!mqttClient)return;saveIdentity();const payload={name:myName,color:myColor,online:true,joinTs:myJoinTs};if(groupName)payload.groupName=groupName;mqttClient.publish(`fc/${groupId}/member/${myId}`,JSON.stringify(payload),{retain:true,qos:1});}
 function publishPos(){
   if(!mqttClient||myLat===null)return;
   // Rate limiting: pubblica solo se spostato ≥5m dall'ultimo invio
