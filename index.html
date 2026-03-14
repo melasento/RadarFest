@@ -287,7 +287,7 @@ body{transition:filter .3s;}
 <div class="screen" id="s-radar">
   <div id="topbar">
     <div class="gdot wait" id="gdot"></div>
-    <div onclick="refreshMyPos()" style="cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;flex-shrink:0;gap:0"><div class="glbl" id="glbl">GPS...</div><div style="font-size:9px;color:var(--cyan);font-weight:800;letter-spacing:.6px;line-height:1">AGGIORNA</div></div>
+    <div onclick="refreshMyPos()" style="cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;flex-shrink:0;"><div class="glbl" id="glbl">GPS...</div><div style="font-size:9px;color:var(--cyan);font-weight:800;letter-spacing:.6px;line-height:1">AGGIORNA</div></div>
     <div class="dvd"></div>
     <div class="gnm" id="gnm">Gruppo</div>
     <div class="cbdg" id="cbdg" onclick="copyCode()">—</div>
@@ -1724,9 +1724,11 @@ window.addEventListener('DOMContentLoaded',()=>{
   }
 });
 
-// ══════════════════════════════════════════════════════════════════
-// SOS — HTMLAudio + WAV inline + Notifiche sistema + SW + AutoGPS
-// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════
+// SOS — SCHERMO SPENTO: audio 40Hz quasi inaudibile + MediaSession API
+// Chrome Android non sospende mai le pagine con media session attiva
+// ══════════════════════════════════════════════════════════════════════
+
 function _mkWav(freq,secs,vol){
   const sr=22050,n=Math.floor(sr*secs),buf=new ArrayBuffer(44+n*2),v=new DataView(buf);
   const ws=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));
@@ -1735,29 +1737,59 @@ function _mkWav(freq,secs,vol){
   v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);
   ws(36,'data');v.setUint32(40,n*2,true);
   for(let i=0;i<n;i++){
-    const t=i/sr,fade=Math.min(1,Math.min(i,n-i)/(sr*0.015));
-    const s=freq===0?0:Math.round(fade*vol*32000*Math.sign(Math.sin(2*Math.PI*freq*t)));
+    const t=i/sr,fade=Math.min(1,Math.min(i,n-i)/(sr*0.01));
+    // 40Hz quasi inaudibile — mantiene sessione media attiva
+    const s=Math.round(fade*vol*32000*Math.sin(2*Math.PI*freq*t));
     v.setInt16(44+i*2,s,true);
   }
   return URL.createObjectURL(new Blob([buf],{type:'audio/wav'}));
 }
-function _unlockAudio(){
-  if(_keepaliveAudio)return;
-  _keepaliveAudio=new Audio(_mkWav(0,3,0));
-  _keepaliveAudio.loop=true;_keepaliveAudio.volume=0.001;
-  _keepaliveAudio.play()
-    .then(()=>showToast('✅ Audio SOS sbloccato — schermo spento OK'))
-    .catch(e=>showToast('⚠️ Audio: '+e.message));
+
+function _setupMediaSession(){
+  if(!('mediaSession' in navigator)) return;
+  // Registra l'app come player Android → Chrome non viene mai sospeso
+  navigator.mediaSession.metadata=new MediaMetadata({
+    title:'Radar Fest — SOS Attivo',
+    artist:'In ascolto emergenze nel gruppo',
+    album:groupId||'Gruppo'
+  });
+  // Handler obbligatori per mantenere la sessione attiva
+  ['play','pause','stop'].forEach(a=>{
+    try{navigator.mediaSession.setActionHandler(a,()=>{});}catch(e){}
+  });
+  navigator.mediaSession.playbackState='playing';
 }
+
+function _unlockAudio(){
+  if(_keepaliveAudio) return;
+  // 40Hz @ volume 0.02 — quasi inaudibile ma sufficiente per media session
+  _keepaliveAudio=new Audio(_mkWav(40,4,0.02));
+  _keepaliveAudio.loop=true;
+  _keepaliveAudio.volume=0.02;
+  _keepaliveAudio.play()
+    .then(()=>{
+      _setupMediaSession();
+      showToast('✅ SOS schermo spento attivo');
+    })
+    .catch(e=>showToast('⚠️ Audio: '+e.message));
+  // Riattiva se sospesa
+  _keepaliveAudio.addEventListener('pause',()=>{
+    if(_keepaliveAudio) _keepaliveAudio.play().catch(()=>{});
+  });
+}
+
 function _startSOSBeep(){
-  if(_sosBeepAudio)return;
-  _sosBeepAudio=new Audio(_mkWav(880,0.45,0.85));
-  _sosBeepAudio.loop=true;_sosBeepAudio.volume=1.0;
+  if(_sosBeepAudio) return;
+  _sosBeepAudio=new Audio(_mkWav(880,0.4,0.9));
+  _sosBeepAudio.loop=true; _sosBeepAudio.volume=1.0;
   _sosBeepAudio.play().catch(()=>{});
 }
-function _stopSOSBeep(){if(_sosBeepAudio){_sosBeepAudio.pause();_sosBeepAudio=null;}}
+function _stopSOSBeep(){
+  if(_sosBeepAudio){_sosBeepAudio.pause();_sosBeepAudio=null;}
+}
 
-const _SW=`
+// ── Notifiche sistema (vibrazione lock screen) ──────────────────────
+const _SW_CODE=`
 self.addEventListener('install',()=>self.skipWaiting());
 self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
 self.addEventListener('notificationclick',e=>{
@@ -1767,17 +1799,15 @@ self.addEventListener('notificationclick',e=>{
     return w?w.focus():self.clients.openWindow('/');
   }));
 });
-self.addEventListener('message',e=>{if(e.data==='ping')e.source?.postMessage('pong');});
 `;
 async function _initSW(){
-  if(!('serviceWorker' in navigator)||_swReg)return;
+  if(!('serviceWorker'in navigator)||_swReg)return;
   try{
     const ex=await navigator.serviceWorker.getRegistration(location.href);
     if(ex){_swReg=ex;return;}
     _swReg=await navigator.serviceWorker.register(
-      URL.createObjectURL(new Blob([_SW],{type:'application/javascript'})));
+      URL.createObjectURL(new Blob([_SW_CODE],{type:'application/javascript'})));
   }catch(e){_swReg=null;}
-  if(!_swKaIv)_swKaIv=setInterval(()=>navigator.serviceWorker?.controller?.postMessage('ping'),20000);
 }
 
 const _SOS_ICO='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(
@@ -1789,9 +1819,10 @@ async function _fireNotif(name){
   if(!('Notification'in window)||Notification.permission!=='granted')return;
   const o={body:(name||'Un amico')+' ha bisogno di aiuto!',requireInteraction:true,
     vibrate:[700,150,700,150,700,300,1000,300,1000],tag:'sos-ring',renotify:true,
-    icon:_SOS_ICO,badge:_SOS_ICO,data:{url:location.href}};
+    icon:_SOS_ICO,badge:_SOS_ICO};
   if(_swReg){try{await _swReg.showNotification('🆘 EMERGENZA SOS!',o);return;}catch(e){}}
-  try{new Notification('🆘 EMERGENZA SOS!',{body:o.body,requireInteraction:true,tag:'sos-ring',renotify:true,icon:_SOS_ICO});}catch(e){}
+  try{new Notification('🆘 EMERGENZA SOS!',{body:o.body,requireInteraction:true,
+    tag:'sos-ring',renotify:true,icon:_SOS_ICO});}catch(e){}
 }
 function _startSOSRing(n){
   _fireNotif(n);
@@ -1803,22 +1834,39 @@ function _stopSOSRing(){
   _swReg?.getNotifications({tag:'sos-ring'}).then(ns=>ns.forEach(n=>n.close())).catch(()=>{});
 }
 
+// ── Dialog SOS ──────────────────────────────────────────────────────
 function acceptSOSPerm(){
   document.getElementById('sos-perm-overlay').classList.remove('show');
-  _unlockAudio();
-  if(Notification.permission==='granted'){_initSW();}
-  else if('Notification'in window){
+  _unlockAudio(); // GESTO UTENTE → sblocca audio + MediaSession
+  if(Notification.permission==='granted'){
+    _initSW();
+  } else if('Notification'in window){
     Notification.requestPermission().then(p=>{
       if(p==='granted')_initSW();
-      else showToast('⚠️ SOS attivo solo con app aperta');
+      else showToast('Notifiche negate: SOS suona solo con app aperta');
     });
   }
 }
 function denySOSPerm(){
   document.getElementById('sos-perm-overlay').classList.remove('show');
-  showToast('SOS attivo solo con app aperta e schermo acceso');
+  showToast('SOS attivo solo con app aperta');
 }
 
+// ── Riconnessione MQTT quando torna in foreground ───────────────────
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden) return;
+  // Rientra in foreground: verifica connessione MQTT
+  if(mqttClient && !mqttClient.connected){
+    mqttClient.reconnect();
+  }
+  // Riattiva audio keepalive se era stato sospeso
+  if(_keepaliveAudio && _keepaliveAudio.paused){
+    _keepaliveAudio.play().catch(()=>{});
+    _setupMediaSession();
+  }
+});
+
+// ── Auto-GPS 45s ────────────────────────────────────────────────────
 function _startAutoGps(){
   if(_autoGpsIv)clearInterval(_autoGpsIv);
   _autoGpsIv=setInterval(()=>{
@@ -1832,6 +1880,13 @@ function _startAutoGps(){
       publishPos();
     },()=>{},{enableHighAccuracy:true,maximumAge:0,timeout:12000});
   },45000);
+}
+
+// ── selPinVis ────────────────────────────────────────────────────────
+function selPinVis(v,btn){
+  _pinVis=v;
+  document.querySelectorAll('.pin-vis-btn').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
 }
 
 </script>
