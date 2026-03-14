@@ -226,6 +226,7 @@ body{display:flex;flex-direction:column}
     <div class="crow" id="crow"></div>
     <button class="btn btn-g" onclick="confirmName()">Entra →</button>
     <button class="btn btn-ghost" onclick="goLanding()">← Indietro</button>
+    <p class="hint" id="name-hint" style="display:none;color:var(--orange);margin-top:6px"></p>
   </div>
 </div>
 
@@ -239,6 +240,7 @@ body{display:flex;flex-direction:column}
     <div class="cbdg" id="cbdg" onclick="copyCode()">—</div>
     <div class="mct" id="mct">1 membro</div>
     <div class="tacts">
+      <button class="tbtn" onclick="startAddPin()" title="Aggiungi posizione" style="font-size:18px">📍</button>
       <button class="tbtn" id="bell-btn" onclick="toggleNotifPanel()">
         🔔<div class="notif-badge" id="notif-badge">0</div>
       </button>
@@ -396,21 +398,56 @@ function buildPicker(){
   });
 }
 
+
+// ══════════════════════════════════════════
+// IDENTITY persistente per gruppo
+// ══════════════════════════════════════════
+function saveIdentity(){
+  localStorage.setItem('rfid_'+groupId, JSON.stringify({id:myId,name:myName,color:myColor}));
+}
+function loadIdentity(){
+  try{
+    const d=JSON.parse(localStorage.getItem('rfid_'+groupId)||'null');
+    if(d&&d.id&&d.name){myId=d.id;myName=d.name;myColor=d.color||COLORS[1];selColor=myColor;return true;}
+  }catch(e){}
+  return false;
+}
+function isNameTaken(name){
+  return Object.values(friends).some(f=>f.name&&f.name.trim().toLowerCase()===name.trim().toLowerCase());
+}
 // ══════════════════════════════════
 // NAV
 // ══════════════════════════════════
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
 function goLanding(){show('s-landing');groupId=null;}
-function startCreate(){groupId=rndCode();groupName=document.getElementById('group-name-inp').value.trim()||('Gruppo '+groupId);buildPicker();show('s-name');setTimeout(()=>document.getElementById('name-inp').focus(),80);}
+function startCreate(){
+  groupId=rndCode();
+  groupName=document.getElementById('group-name-inp').value.trim()||('Gruppo '+groupId);
+  if(loadIdentity()){ enterGroup(); return; }
+  buildPicker();show('s-name');
+  setTimeout(()=>document.getElementById('name-inp').focus(),80);
+}
 function startJoin(){
   const c=document.getElementById('code-inp').value.trim().toUpperCase();
   if(c.length<4){showToast('⚠️ Codice non valido');return;}
-  groupId=c;groupName='';buildPicker();show('s-name');setTimeout(()=>document.getElementById('name-inp').focus(),80);
+  groupId=c;groupName='';
+  if(loadIdentity()){ enterGroup(); return; }
+  buildPicker();show('s-name');
+  setTimeout(()=>document.getElementById('name-inp').focus(),80);
 }
 function confirmName(){
   const n=document.getElementById('name-inp').value.trim();
   if(!n){showToast('⚠️ Inserisci il tuo nome');return;}
-  myName=n;myColor=selColor;myId=uid();enterGroup();
+  if(isNameTaken(n)){
+    const h=document.getElementById('name-hint');
+    h.textContent='⚠️ Nome già in uso nel gruppo, scegline un altro';
+    h.style.display='block';
+    return;
+  }
+  document.getElementById('name-hint').style.display='none';
+  myName=n;myColor=selColor;myId=uid();
+  saveIdentity();
+  enterGroup();
 }
 function enterGroup(){
   show('s-radar');
@@ -423,6 +460,10 @@ function enterGroup(){
   // Blocca rotazione in portrait
   try{screen.orientation.lock('portrait').catch(()=>{});}catch(e){}
   loadPins();
+  // Wake Lock: schermo sempre acceso (migliora GPS)
+  if('wakeLock' in navigator){
+    navigator.wakeLock.request('screen').catch(()=>{});
+  }
 }
 
 // ══════════════════════════════════
@@ -757,12 +798,13 @@ function confirmPin(){
   closePinModal();
   showToast('📍 Punto salvato!');
   renderLista();
+  renderPosizioni();
 }
 function deletePin(pinId){
   const p = pins.find(x=>x.id===pinId);
   if(!p) return;
   pins = pins.filter(x=>x.id!==pinId);
-  savePinsLocal();
+  savePinsLocal(); renderPosizioni();
   if(mqttClient) mqttClient.publish(`fc/${groupId}/pin_del/${myId}`,
     JSON.stringify({pinId, ts:Date.now()}), {retain:false, qos:0});
   renderLista();
@@ -778,6 +820,47 @@ function republishAllPins(){
 
 // (pin aperto tramite bottone topbar 📍)
 
+
+// ══════════════════════════════════════════
+// GPS ACQUIRE per pin (multi-sample)
+// ══════════════════════════════════════════
+let _acqSamples=[], _acqWatch=null, _acqTimer=null;
+const ACQ_SAMPLES=5, ACQ_TIMEOUT=8000;
+
+function startAddPin(){
+  if(!navigator.geolocation){ showPinModal(); return; }
+  _acqSamples=[];
+  document.getElementById('gps-acquire').classList.add('show');
+  document.getElementById('gps-acq-lbl').textContent='Acquisizione GPS…';
+  document.getElementById('gps-acq-acc').textContent='Raccolta campioni (0/'+ACQ_SAMPLES+')';
+  _acqWatch=navigator.geolocation.watchPosition(pos=>{
+    const s={lat:pos.coords.latitude,lon:pos.coords.longitude,acc:pos.coords.accuracy};
+    _acqSamples.push(s);
+    document.getElementById('gps-acq-acc').textContent=
+      'Campioni: '+_acqSamples.length+'/'+ACQ_SAMPLES+' — precisione ±'+Math.round(s.acc)+'m';
+    if(_acqSamples.length>=ACQ_SAMPLES) _finishAcquire();
+  }, ()=>{}, {enableHighAccuracy:true,maximumAge:0,timeout:5000});
+  _acqTimer=setTimeout(_finishAcquire, ACQ_TIMEOUT);
+}
+function skipAcquire(){
+  clearTimeout(_acqTimer);
+  if(_acqWatch) navigator.geolocation.clearWatch(_acqWatch);
+  document.getElementById('gps-acquire').classList.remove('show');
+  showPinModal();
+}
+function _finishAcquire(){
+  clearTimeout(_acqTimer);
+  if(_acqWatch) navigator.geolocation.clearWatch(_acqWatch);
+  document.getElementById('gps-acquire').classList.remove('show');
+  if(_acqSamples.length){
+    // Prende il campione con accuratezza migliore (acc più bassa)
+    const best=_acqSamples.reduce((a,b)=>a.acc<b.acc?a:b);
+    myLat=best.lat; myLon=best.lon; myAcc=Math.round(best.acc);
+    document.getElementById('gdot').className='gdot ok';
+    document.getElementById('glbl').textContent='GPS ±'+myAcc+'m';
+  }
+  showPinModal();
+}
 // LOOP
 // ══════════════════════════════════
 let prevT=0;
@@ -826,9 +909,8 @@ function startGps(){
   function startWatch(moving){
     if(gpsWatch)navigator.geolocation.clearWatch(gpsWatch);
     gpsMoving=moving;
-    const opts=moving
-      ?{enableHighAccuracy:true,maximumAge:5000,timeout:20000}
-      :{enableHighAccuracy:false,maximumAge:45000,timeout:60000};
+    // Sempre massima precisione — maximumAge:0 forza letture fresche
+    const opts={enableHighAccuracy:true,maximumAge:0,timeout:15000};
     gpsWatch=navigator.geolocation.watchPosition(pos=>{
       const lat=pos.coords.latitude,lon=pos.coords.longitude,acc=Math.round(pos.coords.accuracy);
       gpsTs=Date.now();dot.className='gdot ok';
@@ -848,7 +930,20 @@ function startGps(){
           if(!gpsMoving)startWatch(true);
         }
       }
-      myLat=lat;myLon=lon;myAcc=acc;publishPos();
+      // Kalman-like smoothing sulla propria posizione
+      if(myLat===null){
+        myLat=lat;myLon=lon;
+      } else {
+        const A=acc/40;
+        const w=Math.min(0.85,Math.max(0.15,20/Math.max(acc,1)));
+        const mv=distBear(myLat,myLon,lat,lon).dist;
+        if(mv>acc*2.5){myLat=lat;myLon=lon;}  // salto reale
+        else if(mv>3){
+          myLat=myLat*(1-w)+lat*w;
+          myLon=myLon*(1-w)+lon*w;
+        }
+      }
+      myAcc=acc;publishPos();
     },()=>{document.getElementById('gdot').className='gdot';document.getElementById('glbl').textContent='GPS off';},opts);
   }
   startWatch(true);
@@ -938,7 +1033,7 @@ function connectMQTT(){
   });
   mqttClient.on('offline',()=>showToast('⚠️ Connessione persa…'));
 }
-function publishMember(){if(!mqttClient)return;const payload={name:myName,color:myColor,online:true};if(groupName)payload.groupName=groupName;mqttClient.publish(`fc/${groupId}/member/${myId}`,JSON.stringify(payload),{retain:true,qos:1});}
+function publishMember(){if(!mqttClient)return;saveIdentity();const payload={name:myName,color:myColor,online:true};if(groupName)payload.groupName=groupName;mqttClient.publish(`fc/${groupId}/member/${myId}`,JSON.stringify(payload),{retain:true,qos:1});}
 function publishPos(){
   if(!mqttClient||myLat===null)return;
   // Rate limiting: pubblica solo se spostato ≥5m dall'ultimo invio
@@ -1118,39 +1213,52 @@ function updateUI(){
   renderLista();
 }
 function switchTab(t){
-  const r=t==='r';
+  const r=t==='r', l=t==='l', p=t==='p';
   document.getElementById('radar-wrap').style.display=r?'block':'none';
-  document.getElementById('lista').style.display=r?'none':'block';
+  document.getElementById('lista').style.display=l?'block':'none';
+  document.getElementById('posizioni').style.display=p?'block':'none';
   document.getElementById('tab-r').classList.toggle('active',r);
-  document.getElementById('tab-l').classList.toggle('active',!r);
-  if(r)setTimeout(fixCanvas,30);
+  document.getElementById('tab-l').classList.toggle('active',l);
+  document.getElementById('tab-p').classList.toggle('active',p);
+  if(r) setTimeout(fixCanvas,30);
+  if(p) renderPosizioni();
 }
 function renderLista(){
   const el=document.getElementById('lista'),list=Object.values(friends);
   if(!list.length){el.innerHTML=`<div style="color:var(--dim);text-align:center;margin-top:60px;font-size:13px;line-height:2">Nessun amico.<br>Codice: <b style="color:var(--cyan)">${groupId}</b></div>`;return;}
-  // Sezione pin
-  const pinHtml = pins.length ? `<div style='font-size:11px;color:var(--dim);font-weight:700;letter-spacing:.5px;padding:4px 2px 8px'>PUNTI SALVATI</div>`
-    + pins.map(p=>{
-      const shp=PIN_SHAPES.find(s=>s.id===p.shape)||PIN_SHAPES[7];
-      const canDel=(p.ownerId===myId);
-      const db=myLat!==null?distBear(myLat,myLon,p.lat,p.lon):null;
-      const ds=db?Math.round(db.dist)+'m':'';
-      return `<div class='fr'>`
-        +`<div class='av' style='border-color:${p.color};color:${p.color};background:${hex2rgba(p.color,.15)};font-size:20px'>${shp.emoji}</div>`
-        +`<div class='fi'><div class='fn'>${p.name}</div>`
-        +`<div class='fs'>${p.ownerName}${ds?' · '+ds:''}</div></div>`
-        +(canDel?`<button onclick='deletePin("${p.id}")' style='background:transparent;border:1px solid var(--ring);color:var(--dim);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:inherit'>✕</button>`:'')
-        +`</div>`;
-    }).join('')
-    + `<div style='height:1px;background:var(--ring);margin:8px 0 12px'></div>`
-  : '';
-  el.innerHTML=pinHtml+list.map(f=>{
+  el.innerHTML=list.map(f=>{
     const col=f.color||'#00c0ff',pr=predictPos(f);
     const db2=(f.lat&&myLat)?distBear(myLat,myLon,f.lat,f.lon):null; // distanza da GPS grezzo
     const ds=db2?Math.round(db2.dist)+'m':'—',dr=db2?cardinal(db2.bearing):'—';
     return `<div class="fr"><div class="av" style="border-color:${col};color:${col};background:${hex2rgba(col,.15)}">${(f.name||'?')[0].toUpperCase()}</div><div class="fi"><div class="fn">${f.name||'Amico'}</div><div class="fs">${dr} · <span style="color:${(Date.now()-(f.ts||0))>90000?'var(--orange)':'var(--green)'}">GPS</span></div></div><div class="fd" style="color:${col}">${ds}</div></div>`;
   }).join('');
 }
+
+function renderPosizioni(){
+  const el=document.getElementById('pin-list-screen');
+  if(!el) return;
+  if(!pins.length){
+    el.innerHTML='<div class="pos-empty">Nessun punto salvato.<br>Premi <b>＋ Aggiungi</b> per segnare una posizione.</div>';
+    return;
+  }
+  el.innerHTML=pins.map(p=>{
+    const shp=PIN_SHAPES.find(s=>s.id===p.shape)||PIN_SHAPES[7];
+    const db=myLat!==null?distBear(myLat,myLon,p.lat,p.lon):null;
+    const ds=db?Math.round(db.dist)+'m':'';
+    const dir=db?cardinal(db.bearing):'';
+    const canDel=(p.ownerId===myId);
+    return `<div class="pin-card">
+      <div class="pc-icon" style="background:${hex2rgba(p.color,.18)};border:1.5px solid ${p.color}55">${shp.emoji}</div>
+      <div class="pc-info">
+        <div class="pc-name" style="color:${p.color}">${p.name}</div>
+        <div class="pc-sub">${p.ownerName}${dir?' · '+dir:''}</div>
+      </div>
+      ${ds?`<div class="pc-dist" style="color:${p.color}">${ds}</div>`:''}
+      ${canDel?`<button class="pc-del" onclick="deletePin('${p.id}')">✕</button>`:''}
+    </div>`;
+  }).join('');
+}
+
 
 // ══════════════════════════════════
 // SHARE
@@ -1172,7 +1280,13 @@ function showToast(m){const t=document.getElementById('toast');t.textContent=m;t
 // ══════════════════════════════════
 window.addEventListener('DOMContentLoaded',()=>{
   const c=new URLSearchParams(location.search).get('group');
-  if(c){groupId=c.toUpperCase();document.getElementById('code-inp').value=groupId;buildPicker();show('s-name');showToast('🔗 Codice: '+groupId);}
+  if(c){
+    groupId=c.toUpperCase();
+    document.getElementById('code-inp').value=groupId;
+    showToast('🔗 Codice: '+groupId);
+    if(loadIdentity()){ enterGroup(); }
+    else{ buildPicker();show('s-name'); }
+  }
 });
 </script>
 
