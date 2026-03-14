@@ -150,6 +150,24 @@ body{display:flex;flex-direction:column}
   border-radius:8px;pointer-events:none;z-index:10;
   font-family:inherit;letter-spacing:.5px;
 }
+
+/* PIN MODAL */
+#pin-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:600;display:none;align-items:center;justify-content:center;padding:16px;}
+#pin-overlay.show{display:flex;}
+#pin-modal{background:var(--bg2);border:1px solid var(--ring);border-radius:18px;padding:20px 18px;width:100%;max-width:340px;display:flex;flex-direction:column;gap:14px;}
+.pin-title{font-size:15px;font-weight:800;color:var(--cyan);text-align:center;letter-spacing:.5px;}
+.pin-section-lbl{font-size:11px;color:var(--dim);font-weight:700;margin-bottom:6px;letter-spacing:.5px;}
+.pin-shapes{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
+.pin-shape-btn{width:44px;height:44px;border-radius:10px;border:2px solid var(--ring);background:var(--bg);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;}
+.pin-shape-btn.sel{border-color:#fff;background:var(--bg3);}
+.pin-colors{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
+.pin-color-btn{width:28px;height:28px;border-radius:50%;border:2.5px solid transparent;cursor:pointer;transition:transform .15s;}
+.pin-color-btn.sel{border-color:#fff;transform:scale(1.2);}
+.pin-row{display:flex;gap:8px;}
+.pin-btn-cancel{flex:1;padding:10px;border-radius:10px;border:1px solid var(--ring);background:transparent;color:var(--dim);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+.pin-btn-save{flex:2;padding:10px;border-radius:10px;border:none;background:var(--cyan);color:#000;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;}
+/* Pin progress ring sul canvas */
+#pin-progress{position:absolute;bottom:0;left:0;right:0;top:0;pointer-events:none;z-index:5;}
 </style>
 </head>
 <body>
@@ -372,9 +390,11 @@ function enterGroup(){
   document.getElementById('gnm').textContent=groupName||('Gruppo '+groupId);
   setTimeout(fixCanvas,50);
   connectMQTT();startGps();
+  setTimeout(republishAllPins,3000);
   requestCompassPermission();
   // Blocca rotazione in portrait
   try{screen.orientation.lock('portrait').catch(()=>{});}catch(e){}
+  loadPins();
 }
 
 // ══════════════════════════════════
@@ -520,7 +540,46 @@ if(pAge<600){
     ctx.fillStyle='#ffffffee';ctx.font='bold 11px sans-serif';ctx.textAlign='left';ctx.fillText(nm,lx,ly+13);
     ctx.fillStyle=fc;ctx.font='10px sans-serif';ctx.fillText(ds,lx,ly+25);
   });
-  // IO
+  
+  // ── PIN ──────────────────────────────────────────────────────────
+  if(myLat!==null){
+    pins.forEach(p=>{
+      if(p.lat===null) return;
+      const {dist,bearing} = distBear(myLat,myLon,p.lat,p.lon);
+      const outside = dist > MAX_R;
+      const rr = R * Math.min(dist/MAX_R, 0.93);
+      const ar = d2r(bearing - compassHeading) - Math.PI/2;
+      const px2 = cx + rr*Math.cos(ar), py2 = cy + rr*Math.sin(ar);
+      const shp = PIN_SHAPES.find(s=>s.id===p.shape)||PIN_SHAPES[7];
+      // Sfondo tondo
+      ctx.beginPath(); ctx.arc(px2,py2,13,0,Math.PI*2);
+      ctx.fillStyle = hex2rgba(p.color, outside?0.25:0.22);
+      ctx.strokeStyle = p.color+(outside?'55':'cc');
+      ctx.lineWidth = 1.5; ctx.fill(); ctx.stroke();
+      // Emoji
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.globalAlpha = outside ? 0.45 : 1;
+      ctx.fillText(shp.emoji, px2, py2);
+      ctx.globalAlpha = 1;
+      // Label
+      const ds2 = Math.round(dist)+'m';
+      ctx.font = 'bold 10px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+      const tw2 = Math.max(ctx.measureText(p.name).width, ctx.measureText(ds2).width)+8;
+      ctx.fillStyle='rgba(2,4,14,0.82)'; ctx.fillRect(px2-tw2/2,py2+16,tw2,22);
+      ctx.fillStyle=p.color+'ee'; ctx.fillText(p.name, px2, py2+26);
+      ctx.fillStyle=p.color+'99'; ctx.font='10px sans-serif'; ctx.fillText(ds2, px2, py2+35);
+      ctx.textBaseline='alphabetic'; ctx.textAlign='left';
+    });
+  }
+  // ── Anello progress hold ──────────────────────────────────────────
+  if(_pinPressStart>0){
+    const prog = Math.min((Date.now()-_pinPressStart)/PIN_HOLD,1);
+    ctx.beginPath();
+    ctx.arc(cx,cy,20,-Math.PI/2,-Math.PI/2+Math.PI*2*prog);
+    ctx.strokeStyle='#ffa040cc'; ctx.lineWidth=3; ctx.stroke();
+  }
+// IO
   ctx.beginPath();ctx.arc(cx,cy,7,0,Math.PI*2);ctx.fillStyle=myColor;ctx.shadowColor=myColor;ctx.shadowBlur=18;ctx.fill();ctx.shadowBlur=0;
   ctx.beginPath();ctx.arc(cx,cy,13,0,Math.PI*2);ctx.strokeStyle=myColor+'55';ctx.lineWidth=1.5;ctx.stroke();
   ctx.fillStyle='#ffffffcc';ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText(myName||'Io',cx,cy-18);ctx.textAlign='left';
@@ -609,6 +668,116 @@ document.getElementById('cv').addEventListener('touchend',function(){
   if(now-_lastTap<320){zoomIdx=0;MAX_R=ZOOM_LEVELS[0];updateZoomUI();showToast('Zoom resettato');}
   _lastTap=now;
 },{passive:true});
+
+
+// ══════════════════════════════════════════
+// PINS – punti fissi sulla mappa
+// ══════════════════════════════════════════
+const PIN_SHAPES = [
+  {id:'star',   emoji:'⭐', label:'Ritrovo'},
+  {id:'tent',   emoji:'⛺', label:'Tenda'},
+  {id:'wc',     emoji:'🚻', label:'WC'},
+  {id:'bar',    emoji:'🍺', label:'Bar'},
+  {id:'food',   emoji:'🍔', label:'Cibo'},
+  {id:'music',  emoji:'🎵', label:'Palco'},
+  {id:'medic',  emoji:'🏥', label:'Primo soccorso'},
+  {id:'pin',    emoji:'📍', label:'Generico'},
+];
+let pins = [];           // {id,name,shape,color,lat,lon,ownerId,ownerName}
+let _pinSelShape = PIN_SHAPES[0].id;
+let _pinSelColor = '#ffa040';
+let _pinPressTimer = null;
+let _pinPressStart = 0;
+const PIN_HOLD = 6000;   // ms
+
+function loadPins(){
+  try{ pins = JSON.parse(localStorage.getItem('rfpins_'+groupId)||'[]'); }catch(e){ pins=[]; }
+}
+function savePinsLocal(){
+  localStorage.setItem('rfpins_'+groupId, JSON.stringify(pins));
+}
+
+function showPinModal(){
+  if(myLat===null){ showToast('GPS non disponibile'); return; }
+  // build shape picker
+  const ss = document.getElementById('pin-shapes');
+  ss.innerHTML = PIN_SHAPES.map(s=>
+    `<button class="pin-shape-btn${s.id===_pinSelShape?' sel':''}" title="${s.label}"
+      onclick="selPinShape('${s.id}',this)">${s.emoji}</button>`
+  ).join('');
+  // build color picker
+  const cs = document.getElementById('pin-colors');
+  cs.innerHTML = ['#ffa040','#00e87a','#00c0ff','#ff3344','#c084fc','#facc15','#f472b6','#ffffff']
+    .map(c=>`<button class="pin-color-btn${c===_pinSelColor?' sel':''}"
+      style="background:${c}" onclick="selPinColor('${c}',this)"></button>`).join('');
+  document.getElementById('pin-name-inp').value = '';
+  document.getElementById('pin-overlay').classList.add('show');
+  setTimeout(()=>document.getElementById('pin-name-inp').focus(),80);
+}
+function closePinModal(){
+  document.getElementById('pin-overlay').classList.remove('show');
+}
+function selPinShape(id, btn){
+  _pinSelShape = id;
+  document.querySelectorAll('.pin-shape-btn').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+}
+function selPinColor(c, btn){
+  _pinSelColor = c;
+  document.querySelectorAll('.pin-color-btn').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+}
+function confirmPin(){
+  const name = document.getElementById('pin-name-inp').value.trim();
+  if(!name){ showToast('Inserisci un nome'); return; }
+  const pin = {
+    id: uid(), name, shape: _pinSelShape, color: _pinSelColor,
+    lat: myLat, lon: myLon, ownerId: myId, ownerName: myName
+  };
+  pins.push(pin);
+  savePinsLocal();
+  publishPin(pin);
+  closePinModal();
+  showToast('📍 Punto salvato!');
+  renderLista();
+}
+function deletePin(pinId){
+  const p = pins.find(x=>x.id===pinId);
+  if(!p) return;
+  pins = pins.filter(x=>x.id!==pinId);
+  savePinsLocal();
+  if(mqttClient) mqttClient.publish(`fc/${groupId}/pin_del/${myId}`,
+    JSON.stringify({pinId, ts:Date.now()}), {retain:false, qos:0});
+  renderLista();
+}
+function publishPin(pin){
+  if(!mqttClient) return;
+  mqttClient.publish(`fc/${groupId}/pin/${myId}`,
+    JSON.stringify(pin), {retain:true, qos:1});
+}
+function republishAllPins(){
+  pins.filter(p=>p.ownerId===myId).forEach(p=>publishPin(p));
+}
+
+// Long press sul proprio pallino (centro canvas)
+let _pinProgressAnim = null;
+cv.addEventListener('pointerdown', function(e){
+  if(myLat===null) return;
+  const rect = cv.getBoundingClientRect();
+  const sx = cv.width/rect.width, sy = cv.height/rect.height;
+  const mx = (e.clientX-rect.left)*sx, my2 = (e.clientY-rect.top)*sy;
+  if(Math.hypot(mx-cv.width/2, my2-cv.height/2) > 28) return;
+  _pinPressStart = Date.now();
+  _pinPressTimer = setTimeout(()=>{
+    cancelAnimationFrame(_pinProgressAnim);
+    _pinPressStart = 0;
+    showPinModal();
+  }, PIN_HOLD);
+}, {passive:true});
+
+cv.addEventListener('pointerup',   _cancelPinPress, {passive:true});
+cv.addEventListener('pointerleave',_cancelPinPress, {passive:true});
+function _cancelPinPress(){ clearTimeout(_pinPressTimer); _pinPressStart=0; }
 
 // LOOP
 // ══════════════════════════════════
@@ -952,7 +1121,23 @@ function switchTab(t){
 function renderLista(){
   const el=document.getElementById('lista'),list=Object.values(friends);
   if(!list.length){el.innerHTML=`<div style="color:var(--dim);text-align:center;margin-top:60px;font-size:13px;line-height:2">Nessun amico.<br>Codice: <b style="color:var(--cyan)">${groupId}</b></div>`;return;}
-  el.innerHTML=list.map(f=>{
+  // Sezione pin
+  const pinHtml = pins.length ? `<div style='font-size:11px;color:var(--dim);font-weight:700;letter-spacing:.5px;padding:4px 2px 8px'>PUNTI SALVATI</div>`
+    + pins.map(p=>{
+      const shp=PIN_SHAPES.find(s=>s.id===p.shape)||PIN_SHAPES[7];
+      const canDel=(p.ownerId===myId);
+      const db=myLat!==null?distBear(myLat,myLon,p.lat,p.lon):null;
+      const ds=db?Math.round(db.dist)+'m':'';
+      return `<div class='fr'>`
+        +`<div class='av' style='border-color:${p.color};color:${p.color};background:${hex2rgba(p.color,.15)};font-size:20px'>${shp.emoji}</div>`
+        +`<div class='fi'><div class='fn'>${p.name}</div>`
+        +`<div class='fs'>${p.ownerName}${ds?' · '+ds:''}</div></div>`
+        +(canDel?`<button onclick='deletePin("${p.id}")' style='background:transparent;border:1px solid var(--ring);color:var(--dim);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:inherit'>✕</button>`:'')
+        +`</div>`;
+    }).join('')
+    + `<div style='height:1px;background:var(--ring);margin:8px 0 12px'></div>`
+  : '';
+  el.innerHTML=pinHtml+list.map(f=>{
     const col=f.color||'#00c0ff',pr=predictPos(f);
     const db2=(f.lat&&myLat)?distBear(myLat,myLon,f.lat,f.lon):null; // distanza da GPS grezzo
     const ds=db2?Math.round(db2.dist)+'m':'—',dr=db2?cardinal(db2.bearing):'—';
@@ -983,5 +1168,28 @@ window.addEventListener('DOMContentLoaded',()=>{
   if(c){groupId=c.toUpperCase();document.getElementById('code-inp').value=groupId;buildPicker();show('s-name');showToast('🔗 Codice: '+groupId);}
 });
 </script>
+
+<!-- PIN MODAL -->
+<div id="pin-overlay">
+  <div id="pin-modal">
+    <div class="pin-title">📍 Salva posizione attuale</div>
+    <div>
+      <div class="pin-section-lbl">NOME</div>
+      <input class="field" id="pin-name-inp" maxlength="24" placeholder="Es. Palco principale" style="margin-bottom:0"/>
+    </div>
+    <div>
+      <div class="pin-section-lbl">FORMA</div>
+      <div class="pin-shapes" id="pin-shapes"></div>
+    </div>
+    <div>
+      <div class="pin-section-lbl">COLORE</div>
+      <div class="pin-colors" id="pin-colors"></div>
+    </div>
+    <div class="pin-row">
+      <button class="pin-btn-cancel" onclick="closePinModal()">Annulla</button>
+      <button class="pin-btn-save" onclick="confirmPin()">Salva punto</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
