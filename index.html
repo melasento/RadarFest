@@ -214,8 +214,8 @@ body{transition:filter .3s;}
   position:absolute;top:10px;left:14px;z-index:10;
   background:rgba(10,26,42,0.88);border:2px solid var(--ring);border-radius:50%;
   width:40px;height:40px;display:flex;align-items:center;justify-content:center;
-  cursor:pointer;padding:2px;line-height:0;transition:background .15s,border-color .15s,box-shadow .15s;
-}
+  cursor:pointer;padding:2px;line-height:0;
+  transition:background .15s,border-color .15s,box-shadow .15s;}
 #bright-btn:active{background:rgba(0,192,255,0.18);}
 
 /* TIMER GRUPPO */
@@ -227,23 +227,21 @@ body{transition:filter .3s;}
 @keyframes timerPulse{0%,100%{opacity:1}50%{opacity:.5}}
 #grp-timer .ext-btn{background:#ff6030;color:#fff;border:none;border-radius:6px;
   padding:2px 7px;font-size:10px;font-weight:800;cursor:pointer;font-family:inherit;margin-left:4px;}
-/* OVERLAY PERMESSO SOS */
-#sos-perm-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.82);
-  z-index:1000;display:none;align-items:center;justify-content:center;padding:20px;}
+/* DIALOG SOS PERMISSION */
+#sos-perm-overlay{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.88);
+  display:none;align-items:center;justify-content:center;padding:24px;}
 #sos-perm-overlay.show{display:flex;}
-#sos-perm-modal{background:var(--bg2);border:1px solid var(--ring);border-radius:20px;
-  padding:28px 22px;width:100%;max-width:320px;
-  display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;}
-.spm-icon{font-size:48px;animation:sosPulse 1.5s infinite;}
-.spm-title{font-size:17px;font-weight:900;color:#fff;letter-spacing:.3px;}
-.spm-sub{font-size:12px;color:var(--dim);line-height:1.7;padding:0 4px;}
-.spm-yes{width:100%;padding:14px;border-radius:12px;border:none;
-  background:var(--red);color:#fff;font-size:15px;font-weight:900;
-  cursor:pointer;font-family:inherit;letter-spacing:.3px;
-  box-shadow:0 0 0 0 rgba(255,51,68,0.6);animation:sosPulse 2s infinite;}
-.spm-no{width:100%;padding:10px;border-radius:12px;border:1px solid var(--ring);
-  background:transparent;color:var(--dim);font-size:13px;font-weight:600;
-  cursor:pointer;font-family:inherit;}
+#sos-perm-box{background:#0d1f31;border:2px solid #cc0022;border-radius:22px;
+  padding:30px 22px;width:100%;max-width:310px;display:flex;flex-direction:column;
+  align-items:center;gap:16px;text-align:center;box-shadow:0 0 40px rgba(204,0,34,0.35);}
+.spb-icon{font-size:52px;}.spb-title{font-size:18px;font-weight:900;color:#fff;}
+.spb-body{font-size:12.5px;color:#8ab4d0;line-height:1.75;}.spb-body b{color:#00c0ff;}
+.spb-yes{width:100%;padding:15px;border-radius:14px;border:none;
+  background:linear-gradient(135deg,#cc0022,#ff1a35);color:#fff;
+  font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;
+  box-shadow:0 4px 18px rgba(204,0,34,0.5);}
+.spb-no{width:100%;padding:10px;border-radius:12px;border:1px solid #2a4060;
+  background:transparent;color:#5a7a9a;font-size:13px;cursor:pointer;font-family:inherit;}
 /* OVERLAY GRUPPO SCADUTO */
 #expired-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:999;
   display:none;align-items:center;justify-content:center;flex-direction:column;gap:18px;}
@@ -289,7 +287,7 @@ body{transition:filter .3s;}
 <div class="screen" id="s-radar">
   <div id="topbar">
     <div class="gdot wait" id="gdot"></div>
-    <div onclick="refreshMyPos()" title="Aggiorna posizione GPS" style="cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;flex-shrink:0;gap:1px;"><div class="glbl" id="glbl">GPS...</div><div style="font-size:9px;color:var(--cyan);font-weight:800;letter-spacing:.6px;line-height:1;">AGGIORNA</div></div>
+    <div onclick="refreshMyPos()" style="cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;flex-shrink:0;gap:0"><div class="glbl" id="glbl">GPS...</div><div style="font-size:9px;color:var(--cyan);font-weight:800;letter-spacing:.6px;line-height:1">AGGIORNA</div></div>
     <div class="dvd"></div>
     <div class="gnm" id="gnm">Gruppo</div>
     <div class="cbdg" id="cbdg" onclick="copyCode()">—</div>
@@ -376,10 +374,9 @@ let friends={},predMap={};
 let gpsWatch=null,stTimer=null,mqttClient=null;
 let notifications=[];
 let sosTimer=null,sosAudioCtx=null,sosVibInterval=null,sosAudioInterval=null,sosCountdown=SOS_DURATION;
-let _bgAudioCtx=null;       // AudioContext globale sbloccato da gesto utente
-let _sosNotifIv=null;       // interval notifiche ripetute in background
-let _swReg=null,_swKaIv=null; // Service Worker + keepalive
-let _autoGpsIv=null;        // refresh GPS ogni 45s
+let _keepaliveAudio=null,_sosBeepAudio=null,_sosNotifIv=null;
+let _swReg=null,_swKaIv=null,_autoGpsIv=null;
+let _pinVis="public";
 let sosFromId=null,sosFromPos=null,sosCdInterval=null,sosActiveId=null;
 let rawHeading=0,compassHeading=0; // solo per la freccia nord, non per il radar
 let selectedFriendId=null; // ID amico puntato dalla bussola, null = bussola device
@@ -562,26 +559,16 @@ function enterGroup(){
   document.getElementById('gnm').textContent=groupName||('Gruppo '+groupId);
   setTimeout(fixCanvas,50);
   myJoinTs=Date.now();
-  brightIdx=1; applyBrightness();
-  _startAutoGps();
   connectMQTT();startGps();
   setTimeout(republishAllPins,3000);
   requestCompassPermission();
   // Blocca rotazione in portrait
   try{screen.orientation.lock('portrait').catch(()=>{});}catch(e){}
   loadPins();
-  // Wake Lock: schermo sempre acceso (migliora GPS)
-  if('wakeLock' in navigator){
-    navigator.wakeLock.request('screen').catch(()=>{});
-  }
-  // Chiedi permesso SOS ad OGNI entrata nel gruppo
-  setTimeout(()=>{
-    if(Notification.permission==='granted'){
-      _initSOSBackend(); // già concesso: reinizializza silenziosamente
-    } else {
-      document.getElementById('sos-perm-overlay').classList.add('show');
-    }
-  }, 1200);
+  if('wakeLock' in navigator){navigator.wakeLock.request('screen').catch(()=>{});}
+  brightIdx=1;applyBrightness();
+  _startAutoGps();
+  setTimeout(()=>document.getElementById("sos-perm-overlay").classList.add("show"),1200);
 }
 
 // ══════════════════════════════════
@@ -917,8 +904,8 @@ function showPinModal(){
       style="background:${c}" onclick="selPinColor('${c}',this)"></button>`).join('');
   document.getElementById('pin-name-inp').value = '';
   _pinVis='public';
-  const vp=document.getElementById('vis-pub'),vr=document.getElementById('vis-priv');
-  if(vp)vp.classList.add('sel');if(vr)vr.classList.remove('sel');
+  const _vp=document.getElementById('vis-pub'),_vr=document.getElementById('vis-priv');
+  if(_vp)_vp.classList.add('sel');if(_vr)_vr.classList.remove('sel');
   document.getElementById('pin-overlay').classList.add('show');
   setTimeout(()=>document.getElementById('pin-name-inp').focus(),80);
 }
@@ -930,8 +917,8 @@ function selPinShape(id, btn){
   document.querySelectorAll('.pin-shape-btn').forEach(b=>b.classList.remove('sel'));
   btn.classList.add('sel');
 }
-function selPinColor(c, btn){
-  _pinSelColor = c;
+function selPinColor(c,btn){
+  _pinSelColor=c;
   document.querySelectorAll('.pin-color-btn').forEach(b=>b.classList.remove('sel'));
   btn.classList.add('sel');
 }
@@ -943,7 +930,7 @@ function selPinVis(v,btn){
 function confirmPin(){
   const name=document.getElementById('pin-name-inp').value.trim();
   if(!name){showToast('Inserisci un nome');return;}
-  function _doSave(lat,lon){
+  function _ds(lat,lon){
     const pin={id:uid(),name,shape:_pinSelShape,color:_pinSelColor,
       lat,lon,ownerId:myId,ownerName:myName,visibility:_pinVis};
     pins.push(pin);savePinsLocal();
@@ -953,16 +940,14 @@ function confirmPin(){
     renderLista();renderPosizioni();
   }
   if(navigator.geolocation){
-    const lbl=document.getElementById('glbl');
-    if(lbl)lbl.textContent='GPS fix…';
+    const lbl=document.getElementById('glbl');if(lbl)lbl.textContent='GPS fix…';
     navigator.geolocation.getCurrentPosition(pos=>{
       const lat=pos.coords.latitude,lon=pos.coords.longitude,acc=Math.round(pos.coords.accuracy);
       myLat=lat;myLon=lon;myAcc=acc;gpsTs=Date.now();
       document.getElementById('gdot').className='gdot ok';
-      if(lbl)lbl.textContent='GPS ±'+acc+'m';
-      publishPos();_doSave(lat,lon);
-    },()=>{_doSave(myLat,myLon);},{enableHighAccuracy:true,maximumAge:0,timeout:6000});
-  }else{_doSave(myLat,myLon);}
+      if(lbl)lbl.textContent='GPS ±'+acc+'m';publishPos();_ds(lat,lon);
+    },()=>{_ds(myLat,myLon);},{enableHighAccuracy:true,maximumAge:0,timeout:6000});
+  }else{_ds(myLat,myLon);}
 }
 function deletePin(pinId){
   const p = pins.find(x=>x.id===pinId);
@@ -1059,19 +1044,12 @@ function cycleBrightness(){
   showToast('Luminosità: ' + BRIGHT_LEVELS[brightIdx].label);
 }
 function applyBrightness(){
-  const lvl=BRIGHT_LEVELS[brightIdx];
-  document.body.style.filter=lvl.filter;
+  const lvl=BRIGHT_LEVELS[brightIdx];document.body.style.filter=lvl.filter;
   const btn=document.getElementById('bright-btn');
   if(btn){
     btn.innerHTML=lvl.icon;
-    if(brightIdx===0){
-      btn.style.filter='brightness(3.5)';
-      btn.style.borderColor='rgba(255,200,50,0.9)';
-      btn.style.boxShadow='0 0 8px rgba(255,200,50,0.4)';
-    }else{
-      btn.style.filter='';
-      btn.style.borderColor='';
-      btn.style.boxShadow='';}
+    if(brightIdx===0){btn.style.filter='brightness(3.5)';btn.style.borderColor='rgba(255,200,50,0.9)';btn.style.boxShadow='0 0 8px rgba(255,200,50,0.4)';}
+    else{btn.style.filter='';btn.style.borderColor='';btn.style.boxShadow='';}
   }
   localStorage.setItem('rfbright',brightIdx);
 }
@@ -1155,10 +1133,11 @@ function triggerGroupExpiry(announce){
 
 // Pulizia completa propria (usata sia da expiry sia da leaveGroup)
 function selfDestructClean(){
-  // Ferma GPS e MQTT
-  if(gpsWatch) navigator.geolocation.clearWatch(gpsWatch);
-  _stopSOSRing(); _stopSWKeepalive();
+  if(gpsWatch)navigator.geolocation.clearWatch(gpsWatch);
+  _stopSOSBeep();_stopSOSRing();
+  if(_swKaIv){clearInterval(_swKaIv);_swKaIv=null;}
   if(_autoGpsIv){clearInterval(_autoGpsIv);_autoGpsIv=null;}
+  if(_keepaliveAudio){_keepaliveAudio.pause();_keepaliveAudio=null;}
   // Cancella retained propri dal broker
   if(mqttClient){
     const e = new Uint8Array(0);
@@ -1523,7 +1502,7 @@ function triggerSOS(){
 function startSOSAlert(senderName,senderId){
   sosFromId=senderId||null;
   sosActiveId=senderId||null;
-  _startSOSRing(senderName); // suona in background/schermo spento
+  _startSOSRing(senderName);
   // Salva ultima posizione nota del mittente
   sosFromPos=null;
   if(senderId&&friends[senderId]&&friends[senderId].lat!==null){
@@ -1546,23 +1525,7 @@ function startSOSAlert(senderName,senderId){
     navigator.vibrate([600,200,600,200,600]);
     sosVibInterval=setInterval(()=>navigator.vibrate([600,200,600,200,600]),2500);
   }
-  // Audio — usa il contesto globale già sbloccato (funziona con schermo spento)
-  try{
-    sosAudioCtx = _bgAudioCtx || new(window.AudioContext||window.webkitAudioContext)();
-    if(sosAudioCtx.state==='suspended') sosAudioCtx.resume();
-    function beep(){
-      if(!sosAudioCtx)return;
-      const o=sosAudioCtx.createOscillator();
-      const g=sosAudioCtx.createGain();
-      o.connect(g);g.connect(sosAudioCtx.destination);
-      o.type='square';o.frequency.value=880;
-      g.gain.setValueAtTime(0.7,sosAudioCtx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001,sosAudioCtx.currentTime+0.45);
-      o.start(sosAudioCtx.currentTime);o.stop(sosAudioCtx.currentTime+0.45);
-    }
-    beep();
-    sosAudioInterval=setInterval(beep,700);
-  }catch(e){}
+  _startSOSBeep();
 }
 function updateSOSCountdown(){
   const m=Math.floor(sosCountdown/60),s=sosCountdown%60;
@@ -1570,15 +1533,9 @@ function updateSOSCountdown(){
 }
 function stopSOSAlert(){
   document.getElementById('sos-banner').style.display='none';
-  _stopSOSRing(); // ferma notifiche sistema
   clearInterval(sosVibInterval);clearInterval(sosCdInterval);
   if(navigator.vibrate)navigator.vibrate(0);
-  // Ferma solo gli oscillatori SOS, NON il contesto globale
-  clearInterval(sosAudioInterval); sosAudioInterval=null;
-  if(sosAudioCtx && sosAudioCtx!==_bgAudioCtx){
-    sosAudioCtx.close();
-  }
-  sosAudioCtx=null;
+  _stopSOSBeep();_stopSOSRing();
   // Invia ACK al mittente del SOS (se fermato manualmente da qualcun altro)
   if(sosFromId&&mqttClient&&myId){
     mqttClient.publish(
@@ -1767,12 +1724,40 @@ window.addEventListener('DOMContentLoaded',()=>{
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════
-// SOS — AUDIO GLOBALE + NOTIFICHE SISTEMA (schermo spento / background)
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+// SOS — HTMLAudio + WAV inline + Notifiche sistema + SW + AutoGPS
+// ══════════════════════════════════════════════════════════════════
+function _mkWav(freq,secs,vol){
+  const sr=22050,n=Math.floor(sr*secs),buf=new ArrayBuffer(44+n*2),v=new DataView(buf);
+  const ws=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));
+  ws(0,'RIFF');v.setUint32(4,36+n*2,true);ws(8,'WAVE');ws(12,'fmt ');
+  v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);
+  ws(36,'data');v.setUint32(40,n*2,true);
+  for(let i=0;i<n;i++){
+    const t=i/sr,fade=Math.min(1,Math.min(i,n-i)/(sr*0.015));
+    const s=freq===0?0:Math.round(fade*vol*32000*Math.sign(Math.sin(2*Math.PI*freq*t)));
+    v.setInt16(44+i*2,s,true);
+  }
+  return URL.createObjectURL(new Blob([buf],{type:'audio/wav'}));
+}
+function _unlockAudio(){
+  if(_keepaliveAudio)return;
+  _keepaliveAudio=new Audio(_mkWav(0,3,0));
+  _keepaliveAudio.loop=true;_keepaliveAudio.volume=0.001;
+  _keepaliveAudio.play()
+    .then(()=>showToast('✅ Audio SOS sbloccato — schermo spento OK'))
+    .catch(e=>showToast('⚠️ Audio: '+e.message));
+}
+function _startSOSBeep(){
+  if(_sosBeepAudio)return;
+  _sosBeepAudio=new Audio(_mkWav(880,0.45,0.85));
+  _sosBeepAudio.loop=true;_sosBeepAudio.volume=1.0;
+  _sosBeepAudio.play().catch(()=>{});
+}
+function _stopSOSBeep(){if(_sosBeepAudio){_sosBeepAudio.pause();_sosBeepAudio=null;}}
 
-// --- Service Worker inline ---
-const _SW_SRC=`
+const _SW=`
 self.addEventListener('install',()=>self.skipWaiting());
 self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
 self.addEventListener('notificationclick',e=>{
@@ -1784,111 +1769,56 @@ self.addEventListener('notificationclick',e=>{
 });
 self.addEventListener('message',e=>{if(e.data==='ping')e.source?.postMessage('pong');});
 `;
-
 async function _initSW(){
-  if(!('serviceWorker' in navigator))return;
+  if(!('serviceWorker' in navigator)||_swReg)return;
   try{
     const ex=await navigator.serviceWorker.getRegistration(location.href);
     if(ex){_swReg=ex;return;}
-    const blob=new Blob([_SW_SRC],{type:'application/javascript'});
-    _swReg=await navigator.serviceWorker.register(URL.createObjectURL(blob));
+    _swReg=await navigator.serviceWorker.register(
+      URL.createObjectURL(new Blob([_SW],{type:'application/javascript'})));
   }catch(e){_swReg=null;}
-}
-function _startSWKeepalive(){
-  if(_swKaIv)clearInterval(_swKaIv);
-  _swKaIv=setInterval(()=>navigator.serviceWorker?.controller?.postMessage('ping'),20000);
-}
-function _stopSWKeepalive(){
-  if(_swKaIv){clearInterval(_swKaIv);_swKaIv=null;}
+  if(!_swKaIv)_swKaIv=setInterval(()=>navigator.serviceWorker?.controller?.postMessage('ping'),20000);
 }
 
-// --- AudioContext globale: sbloccato da gesto utente, tenuto vivo da loop silenzioso ---
-function _unlockAudio(){
-  if(_bgAudioCtx){
-    if(_bgAudioCtx.state==='suspended') _bgAudioCtx.resume();
-    return;
-  }
-  try{
-    _bgAudioCtx=new(window.AudioContext||window.webkitAudioContext)();
-    // Buffer 1s di silenzio in loop: mantiene l'audio thread attivo anche con schermo spento
-    const buf=_bgAudioCtx.createBuffer(1,_bgAudioCtx.sampleRate,_bgAudioCtx.sampleRate);
-    const src=_bgAudioCtx.createBufferSource();
-    src.buffer=buf; src.loop=true;
-    const gain=_bgAudioCtx.createGain();
-    gain.gain.value=0.0001; // praticamente inudibile
-    src.connect(gain); gain.connect(_bgAudioCtx.destination);
-    src.start();
-    // Beep di conferma (audio sbloccato!)
-    setTimeout(()=>{
-      const o=_bgAudioCtx.createOscillator();
-      const g=_bgAudioCtx.createGain();
-      o.connect(g); g.connect(_bgAudioCtx.destination);
-      o.type='sine'; o.frequency.value=660;
-      g.gain.setValueAtTime(0.25,_bgAudioCtx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001,_bgAudioCtx.currentTime+0.35);
-      o.start(_bgAudioCtx.currentTime); o.stop(_bgAudioCtx.currentTime+0.35);
-    },80);
-  }catch(e){}
-}
+const _SOS_ICO='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+  +'<rect width="64" height="64" rx="12" fill="#cc0022"/>'
+  +'<text x="32" y="46" font-size="34" text-anchor="middle" fill="#fff">🆘</text></svg>');
 
-// --- Backend SOS: SW + audio + keepalive ---
-async function _initSOSBackend(){
-  _unlockAudio();
-  await _initSW();
-  _startSWKeepalive();
+async function _fireNotif(name){
+  if(!('Notification'in window)||Notification.permission!=='granted')return;
+  const o={body:(name||'Un amico')+' ha bisogno di aiuto!',requireInteraction:true,
+    vibrate:[700,150,700,150,700,300,1000,300,1000],tag:'sos-ring',renotify:true,
+    icon:_SOS_ICO,badge:_SOS_ICO,data:{url:location.href}};
+  if(_swReg){try{await _swReg.showNotification('🆘 EMERGENZA SOS!',o);return;}catch(e){}}
+  try{new Notification('🆘 EMERGENZA SOS!',{body:o.body,requireInteraction:true,tag:'sos-ring',renotify:true,icon:_SOS_ICO});}catch(e){}
 }
-
-// --- Dialog permesso SOS ---
-function acceptSOSPerm(){
-  document.getElementById('sos-perm-overlay').classList.remove('show');
-  Notification.requestPermission().then(p=>{
-    if(p==='granted') _initSOSBackend();
-    else showToast('⚠️ Permesso negato: SOS solo in foreground');
-  });
-}
-function denySOSPerm(){
-  document.getElementById('sos-perm-overlay').classList.remove('show');
-  showToast('SOS attivo solo quando l\'app è aperta');
-}
-
-// --- Icona SOS SVG ---
-const _SOS_ICON='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'+
-  '<rect width="64" height="64" rx="14" fill="#cc0022"/>'+
-  '<text x="32" y="46" font-size="36" text-anchor="middle" fill="#fff" font-family="sans-serif">🆘</text>'+
-  '</svg>');
-
-// --- Notifica sistema SOS ---
-async function _fireSOSNotif(name){
-  if(!('Notification' in window)||Notification.permission!=='granted')return;
-  const opts={
-    body:(name||'Un amico')+' ha bisogno di aiuto immediato!',
-    requireInteraction:true,
-    vibrate:[700,150,700,150,700,300,1000,300,1000],
-    tag:'sos-ring', renotify:true,
-    icon:_SOS_ICON, badge:_SOS_ICON,
-    data:{url:location.href}
-  };
-  if(_swReg){
-    try{await _swReg.showNotification('🆘 EMERGENZA SOS!',opts);return;}catch(e){}
-  }
-  try{new Notification('🆘 EMERGENZA SOS!',{body:opts.body,requireInteraction:true,tag:opts.tag,renotify:true,icon:_SOS_ICON});}catch(e){}
-}
-
-// --- Ring continuo: ogni 4s finché non si ferma ---
-function _startSOSRing(name){
-  _fireSOSNotif(name);
+function _startSOSRing(n){
+  _fireNotif(n);
   if(_sosNotifIv)clearInterval(_sosNotifIv);
-  _sosNotifIv=setInterval(()=>_fireSOSNotif(name),4000);
+  _sosNotifIv=setInterval(()=>_fireNotif(n),4000);
 }
 function _stopSOSRing(){
   if(_sosNotifIv){clearInterval(_sosNotifIv);_sosNotifIv=null;}
-  if(_swReg){_swReg.getNotifications({tag:'sos-ring'}).then(ns=>ns.forEach(n=>n.close())).catch(()=>{});}
+  _swReg?.getNotifications({tag:'sos-ring'}).then(ns=>ns.forEach(n=>n.close())).catch(()=>{});
 }
 
-// ═══════════════════════════════════════════════════════
-// GPS AUTO-REFRESH ogni 45s
-// ═══════════════════════════════════════════════════════
+function acceptSOSPerm(){
+  document.getElementById('sos-perm-overlay').classList.remove('show');
+  _unlockAudio();
+  if(Notification.permission==='granted'){_initSW();}
+  else if('Notification'in window){
+    Notification.requestPermission().then(p=>{
+      if(p==='granted')_initSW();
+      else showToast('⚠️ SOS attivo solo con app aperta');
+    });
+  }
+}
+function denySOSPerm(){
+  document.getElementById('sos-perm-overlay').classList.remove('show');
+  showToast('SOS attivo solo con app aperta e schermo acceso');
+}
+
 function _startAutoGps(){
   if(_autoGpsIv)clearInterval(_autoGpsIv);
   _autoGpsIv=setInterval(()=>{
@@ -1898,25 +1828,10 @@ function _startAutoGps(){
       myLat=lat;myLon=lon;myAcc=acc;gpsTs=Date.now();
       const dot=document.getElementById('gdot'),lbl=document.getElementById('glbl');
       if(dot)dot.className='gdot ok';
-      if(lbl)lbl.textContent='GPS ±'+acc+'m';
+      if(lbl)lbl.textContent='GPS \xb1'+acc+'m';
       publishPos();
     },()=>{},{enableHighAccuracy:true,maximumAge:0,timeout:12000});
   },45000);
-}
-
-// ═══════════════════════════════════════════════════════
-// CLEANUP ALL'USCITA
-// ═══════════════════════════════════════════════════════
-const _origSelfDestruct=window.selfDestructClean||null;
-
-// ═══════════════════════════════════════════════════════
-// PIN VISIBILITÀ
-// ═══════════════════════════════════════════════════════
-let _pinVis='public';
-function selPinVis(v,btn){
-  _pinVis=v;
-  document.querySelectorAll('.pin-vis-btn').forEach(b=>b.classList.remove('sel'));
-  btn.classList.add('sel');
 }
 
 </script>
@@ -1940,7 +1855,7 @@ function selPinVis(v,btn){
     <div>
       <div class="pin-section-lbl">VISIBILITÀ</div>
       <div class="pin-vis-row">
-        <button class="pin-vis-btn sel pub" id="vis-pub" onclick="selPinVis('public',this)">🌐 Tutti nel gruppo</button>
+        <button class="pin-vis-btn sel pub" id="vis-pub" onclick="selPinVis('public',this)">🌐 Tutti</button>
         <button class="pin-vis-btn priv" id="vis-priv" onclick="selPinVis('private',this)">🔒 Solo tu</button>
       </div>
     </div>
@@ -1981,19 +1896,14 @@ function selPinVis(v,btn){
     Torna alla home
   </button>
 </div>
-
-<!-- DIALOG PERMESSO NOTIFICHE SOS -->
+<!-- DIALOG SOS -->
 <div id="sos-perm-overlay">
-  <div id="sos-perm-modal">
-    <div class="spm-icon">🆘</div>
-    <div class="spm-title">Vuoi ricevere il SOS?</div>
-    <div class="spm-sub">
-      Quando un amico del gruppo invia un SOS,<br>
-      il telefono suona e vibra anche con<br>
-      <b style="color:var(--cyan)">schermo spento</b> o app in background.
-    </div>
-    <button class="spm-yes" onclick="acceptSOSPerm()">🆘 Sì, avvisami sempre</button>
-    <button class="spm-no"  onclick="denySOSPerm()">No grazie</button>
+  <div id="sos-perm-box">
+    <div class="spb-icon">🆘</div>
+    <div class="spb-title">Vuoi ricevere il SOS?</div>
+    <div class="spb-body">Quando un amico invia un SOS<br>il telefono <b>suona e vibra anche con<br>schermo spento</b> o app in background.</div>
+    <button class="spb-yes" onclick="acceptSOSPerm()">🆘 Sì, avvisami sempre</button>
+    <button class="spb-no"  onclick="denySOSPerm()">No grazie</button>
   </div>
 </div>
 </body>
