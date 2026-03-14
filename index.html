@@ -75,13 +75,19 @@ body{display:flex;flex-direction:column}
 .fs{font-size:11px;color:var(--dim);margin-top:3px}
 .fd{font-size:18px;font-weight:700;flex-shrink:0}
 /* BOTTOMBAR */
-#bb{background:#050A14;border-top:1px solid #0a2030;padding:8px 12px;flex-shrink:0}
+#bb{
+  background:#050A14;border-top:1px solid #0a2030;
+  padding:8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+  flex-shrink:0;position:relative;z-index:200;
+}
+/* Spazio extra quando GPS attivo (compensa barra nativa browser) */
+#bb.gps-active{padding-bottom:calc(60px + env(safe-area-inset-bottom, 0px));}
 /* SOS BUTTON */
 .sosB{width:100%;padding:13px 10px;border-radius:12px;border:none;font-size:17px;font-weight:900;
       cursor:pointer;background:var(--red);color:#fff;font-family:inherit;
       letter-spacing:1px;
       box-shadow:0 0 0 0 rgba(255,51,68,0.7);
-      animation:sosPulse 2s infinite}
+      animation:sosPulse 2s infinite;position:relative;z-index:201;}
 @keyframes sosPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,51,68,0.5)}70%{box-shadow:0 0 0 10px rgba(255,51,68,0)}}
 .sosB.active{background:#880011;animation:none;box-shadow:none}
 /* waB e icB rimossi dal bottom, ora in topbar */
@@ -140,7 +146,7 @@ body{display:flex;flex-direction:column}
   transition:background .15s;z-index:10;
 }
 .zoom-btn:active{background:rgba(0,192,255,0.18);}
-.zoom-btn:disabled{opacity:0.3;cursor:default;}
+.zoom-btn.at-limit{opacity:0.3;cursor:default;}
 #zoom-out{left:14px;}
 #zoom-in{right:14px;}
 #zoom-lbl{
@@ -195,6 +201,11 @@ body{display:flex;flex-direction:column}
 @keyframes spin{to{transform:rotate(360deg);}}
 .gps-acq-lbl{color:var(--cyan);font-size:13px;font-weight:700;letter-spacing:.5px;}
 .gps-acq-acc{color:var(--dim);font-size:12px;}
+
+/* BRIGHTNESS */
+body{transition:filter .3s;}
+.bright-btn{background:transparent;border:none;cursor:pointer;
+  padding:2px;line-height:0;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
 </style>
 </head>
 <body>
@@ -240,6 +251,7 @@ body{display:flex;flex-direction:column}
     <div class="cbdg" id="cbdg" onclick="copyCode()">—</div>
     <div class="mct" id="mct">1 membro</div>
     <div class="tacts">
+      <button class="bright-btn" id="bright-btn" onclick="cycleBrightness()" title="Luminosità"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="gm" x1="0" y1="1" x2="0" y2="0"><stop offset="50%" stop-color="#888"/><stop offset="50%" stop-color="#fbbf24"/></linearGradient></defs><path d="M12 2a7 7 0 0 0-4 12.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26A7 7 0 0 0 12 2z" fill="url(#gm)" stroke="#fbbf24" stroke-width="1.2"/><path d="M9 18h6M10 21h4" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"/></svg></button>
       <button class="tbtn" onclick="startAddPin()" title="Aggiungi posizione" style="font-size:18px">📍</button>
       <button class="tbtn" id="bell-btn" onclick="toggleNotifPanel()">
         🔔<div class="notif-badge" id="notif-badge">0</div>
@@ -268,9 +280,9 @@ body{display:flex;flex-direction:column}
   </div>
   <div id="radar-wrap">
     <canvas id="cv"></canvas>
-    <button class="zoom-btn" id="zoom-out" onclick="zoomOut()" ontouchend="event.stopPropagation()">−</button>
+    <button class="zoom-btn" id="zoom-out" onclick="event.stopPropagation();zoomOut()" ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()">−</button>
     <span id="zoom-lbl">200 m</span>
-    <button class="zoom-btn" id="zoom-in"  onclick="zoomIn()" ontouchend="event.stopPropagation()">+</button>
+    <button class="zoom-btn" id="zoom-in"  onclick="event.stopPropagation();zoomIn()" ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()">+</button>
     <!-- SOS BANNER (sul radar, non blocca) -->
     <div id="sos-banner">
       <div class="sos-banner-icon">🚨</div>
@@ -760,8 +772,8 @@ function updateZoomUI(){
   if(lbl) lbl.textContent=MAX_R+' m';
   const btnIn=document.getElementById('zoom-in');
   const btnOut=document.getElementById('zoom-out');
-  if(btnIn)  btnIn.disabled=(zoomIdx>=ZOOM_LEVELS.length-1);
-  if(btnOut) btnOut.disabled=(zoomIdx<=0);
+  if(btnIn)  btnIn.classList.toggle('at-limit', zoomIdx>=ZOOM_LEVELS.length-1);
+  if(btnOut) btnOut.classList.toggle('at-limit', zoomIdx<=0);
 }
 function zoomIn(){
   if(zoomIdx<ZOOM_LEVELS.length-1){zoomIdx++;MAX_R=ZOOM_LEVELS[zoomIdx];updateZoomUI();}
@@ -919,6 +931,39 @@ function _finishAcquire(){
   }
   showPinModal();
 }
+
+// ══════════════════════════════════════════
+// BRIGHTNESS
+// ══════════════════════════════════════════
+const BRIGHT_LEVELS = [
+  {filter:'brightness(0.3)', icon:'<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 0 0-4 12.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26A7 7 0 0 0 12 2z" stroke="#555" stroke-width="1.5"/><path d="M9 18h6M10 21h4" stroke="#555" stroke-width="1.5" stroke-linecap="round"/></svg>', label:'Minima'},
+  {filter:'brightness(1)',   icon:'<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="gm" x1="0" y1="1" x2="0" y2="0"><stop offset="50%" stop-color="#888"/><stop offset="50%" stop-color="#fbbf24"/></linearGradient></defs><path d="M12 2a7 7 0 0 0-4 12.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26A7 7 0 0 0 12 2z" fill="url(#gm)" stroke="#fbbf24" stroke-width="1.2"/><path d="M9 18h6M10 21h4" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"/></svg>', label:'Media'},
+  {filter:'brightness(1.7)', icon:'<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="10" r="8" fill="#fbbf2422"/><path d="M12 2a7 7 0 0 0-4 12.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26A7 7 0 0 0 12 2z" fill="#fbbf24" stroke="#fff176" stroke-width="1"/><path d="M9 18h6M10 21h4" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"/><g stroke="#fff176" stroke-width="1.2" stroke-linecap="round"><line x1="12" y1="0.5" x2="12" y2="2"/><line x1="4.2" y1="3.2" x2="5.3" y2="4.3"/><line x1="19.8" y1="3.2" x2="18.7" y2="4.3"/><line x1="2" y1="10" x2="3.5" y2="10"/><line x1="22" y1="10" x2="20.5" y2="10"/></g></svg>', label:'Massima'},
+];
+let brightIdx = 1; // default: media
+
+function cycleBrightness(){
+  brightIdx = (brightIdx + 1) % BRIGHT_LEVELS.length;
+  applyBrightness();
+  showToast('Luminosità: ' + BRIGHT_LEVELS[brightIdx].label);
+}
+function applyBrightness(){
+  const lvl = BRIGHT_LEVELS[brightIdx];
+  document.body.style.filter = lvl.filter;
+  const btn = document.getElementById('bright-btn');
+  if(btn) btn.innerHTML = lvl.icon;
+  // Salva preferenza
+  localStorage.setItem('rfbright', brightIdx);
+}
+// Carica preferenza salvata
+(function(){
+  const saved = parseInt(localStorage.getItem('rfbright'));
+  if(!isNaN(saved) && saved >= 0 && saved < BRIGHT_LEVELS.length){
+    brightIdx = saved;
+    // Applica dopo il DOM
+    window.addEventListener('DOMContentLoaded', applyBrightness);
+  }
+})();
 // LOOP
 // ══════════════════════════════════
 let prevT=0;
@@ -997,7 +1042,7 @@ function startGps(){
     const opts={enableHighAccuracy:true,maximumAge:0,timeout:15000};
     gpsWatch=navigator.geolocation.watchPosition(pos=>{
       const lat=pos.coords.latitude,lon=pos.coords.longitude,acc=Math.round(pos.coords.accuracy);
-      gpsTs=Date.now();dot.className='gdot ok';
+      gpsTs=Date.now();dot.className='gdot ok';document.getElementById('bb').classList.add('gps-active');
       lbl.textContent='GPS ±'+acc+'m'+(gpsMoving?'':' 💤');
       if(myLat!==null){
         const d=distBear(myLat,myLon,lat,lon).dist;
@@ -1028,7 +1073,7 @@ function startGps(){
         }
       }
       myAcc=acc;publishPos();
-    },()=>{document.getElementById('gdot').className='gdot';document.getElementById('glbl').textContent='GPS off';},opts);
+    },()=>{document.getElementById('gdot').className='gdot';document.getElementById('glbl').textContent='GPS off';document.getElementById('bb')?.classList.remove('gps-active');},opts);
   }
   startWatch(true);
 }
@@ -1079,20 +1124,43 @@ function connectMQTT(){
     try{
       const pts=topic.split('/'),type=pts[2],uid2=pts[3];
       if(uid2===myId)return;
-      const data=JSON.parse(payload.toString());
+      const raw=payload.toString();
+      if(!raw.trim()){// Payload vuoto = utente rimosso dal broker
+        delete friends[uid2];delete predMap[uid2];delete smoothFriendPos[uid2];
+        updateUI();return;
+      }
+      const data=JSON.parse(raw);
       if(!friends[uid2])friends[uid2]={id:uid2,lat:null,lon:null,ts:0};
       if(type==='member'){
-        if(data.online===false){delete friends[uid2];delete predMap[uid2];}
-        else{
-          Object.assign(friends[uid2],{name:data.name,color:data.color,id:uid2});
+        if(data.online===false){
+          delete friends[uid2];delete predMap[uid2];delete smoothFriendPos[uid2];
+        } else {
+          // Deduplicazione nome lato client
+          if(data.name){
+            const nameLc = data.name.trim().toLowerCase();
+            const incomingTs = data.joinTs||0;
+            // Cerca un amico esistente con lo stesso nome
+            const dup = Object.values(friends).find(f=>
+              f.id!==uid2 && f.name && f.name.trim().toLowerCase()===nameLc
+            );
+            if(dup){
+              const existingTs = dup.joinTs||0;
+              if(incomingTs > existingTs){
+                // Il nuovo è arrivato dopo → ignoralo, teniamo l'originale
+                return;
+              } else {
+                // Il nuovo è arrivato prima → rimuovi il duplicato più recente
+                delete friends[dup.id];delete predMap[dup.id];delete smoothFriendPos[dup.id];
+              }
+            }
+          }
+          Object.assign(friends[uid2],{name:data.name,color:data.color,id:uid2,joinTs:data.joinTs||0});
           if(data.groupName&&!groupName){groupName=data.groupName;document.getElementById('gnm').textContent=groupName;}
-          // Conflitto nome: stesso nome, ID diverso
+          // Conflitto con il NOSTRO nome → dobbiamo cedere se siamo i nuovi
           if(data.name&&myName&&data.name.trim().toLowerCase()===myName.trim().toLowerCase()&&uid2!==myId){
-            // Chi ha joinTs minore era già nel gruppo → noi dobbiamo cedere
-            const theirTs = data.joinTs||0;
-            const weAreNewer = myJoinTs > theirTs || (myJoinTs===theirTs && myId > uid2);
+            const theirTs=data.joinTs||0;
+            const weAreNewer=myJoinTs>theirTs||(myJoinTs===theirTs&&myId>uid2);
             if(weAreNewer) handleNameConflict();
-            // altrimenti siamo noi i precedenti → l'altro si adeguerà
           }
         }
       }else if(type==='pos'){
@@ -1139,7 +1207,17 @@ function publishPos(){
   lastPubLat=myLat;lastPubLon=myLon;
   mqttClient.publish(`fc/${groupId}/pos/${myId}`,JSON.stringify({lat:myLat,lon:myLon,ts:Date.now(),acc:myAcc}),{retain:true,qos:0});
 }
-function removeMQTT(){if(!mqttClient)return;const e=new Uint8Array(0);mqttClient.publish(`fc/${groupId}/member/${myId}`,e,{retain:true,qos:1});mqttClient.publish(`fc/${groupId}/pos/${myId}`,e,{retain:true,qos:1});mqttClient.end();}
+function removeMQTT(){
+  if(!mqttClient)return;
+  // 1. Notifica uscita a tutti i client connessi
+  mqttClient.publish(`fc/${groupId}/member/${myId}`,
+    JSON.stringify({name:myName,color:myColor,online:false}),{retain:false,qos:1});
+  // 2. Cancella i retained sul broker
+  const e=new Uint8Array(0);
+  mqttClient.publish(`fc/${groupId}/member/${myId}`,e,{retain:true,qos:1});
+  mqttClient.publish(`fc/${groupId}/pos/${myId}`,e,{retain:true,qos:1});
+  mqttClient.end();
+}
 
 // ══════════════════════════════════
 // SOS
@@ -1359,7 +1437,15 @@ function renderPosizioni(){
 // SHARE
 // ══════════════════════════════════
 function getUrl(){const o=location.origin;if(!o||o==='null'||o.startsWith('file'))return null;return o+location.pathname+'?group='+groupId;}
-function shareWA(){const url=getUrl();const msg=url?'📡 *Radar Fest*\nUnisciti al gruppo *'+groupId+'*!\n\n'+url:'📡 *Radar Fest*\nCodice: *'+groupId+'*';if(navigator.share&&url)navigator.share({title:'Radar Fest',url}).catch(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'));else window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');}
+function shareWA(){
+  const url=getUrl();
+  const nome=(groupName||('Gruppo '+groupId));
+  const msg=
+    '📡 *Radar Fest* — '+nome+'\n'
+    +'Unisciti al gruppo *'+groupId+'* per seguirci in tempo reale!\n'
+    +(url?'\n🔗 '+url:'\n📌 Codice: *'+groupId+'*');
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
 function copyLink(){const url=getUrl();if(!url){showToast('⚠️ Serve HTTPS');return;}navigator.clipboard?.writeText(url);showToast('🔗 Link copiato!');}
 function copyCode(){navigator.clipboard?.writeText(groupId);showToast('📋 Codice: '+groupId);}
 function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsWatch)navigator.geolocation.clearWatch(gpsWatch);removeMQTT();friends={};predMap={};smoothFriendPos={};show('s-landing');groupId=null;try{screen.orientation.unlock();}catch(e){}}
