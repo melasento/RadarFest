@@ -413,7 +413,7 @@ function loadIdentity(){
   return false;
 }
 function isNameTaken(name){
-  return Object.values(friends).some(f=>f.name&&f.name.trim().toLowerCase()===name.trim().toLowerCase());
+  return Object.values(friends).some(f=>f.name&&f.id!==myId&&f.name.trim().toLowerCase()===name.trim().toLowerCase());
 }
 
 function checkNameLive(val){
@@ -421,15 +421,40 @@ function checkNameLive(val){
   const n=val.trim();
   if(!n){h.style.display='none';return;}
   if(isNameTaken(n)){
+    h.style.color='var(--orange)';
     h.textContent='⚠️ Nome già in uso nel gruppo';
     h.style.display='block';
   } else {
-    h.textContent='✓ Nome disponibile';
     h.style.color='var(--green)';
+    h.textContent='✓ Nome disponibile';
     h.style.display='block';
   }
 }
 
+
+// ══════════════════════════════════════════
+// GESTIONE CONFLITTO NOME
+// ══════════════════════════════════════════
+function handleNameConflict(){
+  // Ferma tutto
+  if(gpsWatch) navigator.geolocation.clearWatch(gpsWatch);
+  removeMQTT();
+  friends={};predMap={};smoothFriendPos={};
+  // Cancella identity salvata per questo gruppo (nome non più valido)
+  localStorage.removeItem('rfid_'+groupId);
+  myName='';
+  // Torna alla schermata nome con messaggio di errore
+  buildPicker();
+  show('s-name');
+  const h=document.getElementById('name-hint');
+  h.textContent='⚠️ Questo nome è già usato da qualcuno nel gruppo, scegline un altro';
+  h.style.color='var(--orange)';
+  h.style.display='block';
+  // Pre-svuota il campo nome
+  const inp=document.getElementById('name-inp');
+  inp.value='';
+  setTimeout(()=>inp.focus(),80);
+}
 // ══════════════════════════════════
 // NAV
 // ══════════════════════════════════
@@ -637,23 +662,26 @@ if(pAge<600){
       const ar = d2r(bearing - compassHeading) - Math.PI/2;
       const px2 = cx + rr*Math.cos(ar), py2 = cy + rr*Math.sin(ar);
       const shp = PIN_SHAPES.find(s=>s.id===p.shape)||PIN_SHAPES[7];
-      // Alone colorato sotto l'emoji (distingue dal bg)
-      ctx.beginPath(); ctx.arc(px2,py2,14,0,Math.PI*2);
-      ctx.fillStyle = hex2rgba(p.color, outside?0.12:0.18);
-      ctx.fill();
-      // Emoji grande, diretta — nessun pallino, riconoscibile a colpo d'occhio
-      ctx.font = outside ? '18px sans-serif' : '22px sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      // Ombra morbida per leggibilità senza cerchio
+      const emojiSize = outside ? 20 : 26;
+      ctx.save();
       ctx.globalAlpha = outside ? 0.4 : 1;
+      // Shadow per staccare l'icona dal bg scuro
+      ctx.shadowColor = 'rgba(0,0,0,0.85)';
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 1;
+      ctx.font = emojiSize+'px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(shp.emoji, px2, py2);
-      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+      ctx.restore();
       // Label
       const ds2 = Math.round(dist)+'m';
       ctx.font = 'bold 10px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
       const tw2 = Math.max(ctx.measureText(p.name).width, ctx.measureText(ds2).width)+8;
-      ctx.fillStyle='rgba(2,4,14,0.82)'; ctx.fillRect(px2-tw2/2,py2+16,tw2,22);
-      ctx.fillStyle=p.color+'ee'; ctx.fillText(p.name, px2, py2+26);
-      ctx.fillStyle=p.color+'99'; ctx.font='10px sans-serif'; ctx.fillText(ds2, px2, py2+35);
+      ctx.fillStyle='rgba(2,4,14,0.85)'; ctx.fillRect(px2-tw2/2,py2+18,tw2,22);
+      ctx.fillStyle=p.color+'ee'; ctx.fillText(p.name, px2, py2+28);
+      ctx.fillStyle=p.color+'99'; ctx.font='10px sans-serif'; ctx.fillText(ds2, px2, py2+37);
       ctx.textBaseline='alphabetic'; ctx.textAlign='left';
     });
   }
@@ -1016,7 +1044,14 @@ function connectMQTT(){
       if(!friends[uid2])friends[uid2]={id:uid2,lat:null,lon:null,ts:0};
       if(type==='member'){
         if(data.online===false){delete friends[uid2];delete predMap[uid2];}
-        else Object.assign(friends[uid2],{name:data.name,color:data.color,id:uid2});if(data.groupName&&!groupName){groupName=data.groupName;document.getElementById('gnm').textContent=groupName;}
+        else{
+          Object.assign(friends[uid2],{name:data.name,color:data.color,id:uid2});
+          if(data.groupName&&!groupName){groupName=data.groupName;document.getElementById('gnm').textContent=groupName;}
+          // Conflitto nome: stesso nome, ID diverso → forza cambio nome
+          if(data.name&&myName&&data.name.trim().toLowerCase()===myName.trim().toLowerCase()&&uid2!==myId){
+            handleNameConflict();
+          }
+        }
       }else if(type==='pos'){
         if(friends[uid2]&&friends[uid2].lat!==null)predMap[uid2]={lat:friends[uid2].lat,lon:friends[uid2].lon,ts:friends[uid2].ts||0};
         Object.assign(friends[uid2],{lat:data.lat,lon:data.lon,ts:data.ts,acc:data.acc});
