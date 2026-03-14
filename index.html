@@ -598,18 +598,21 @@ ctx.save();ctx.beginPath();ctx.arc(cx,cy,R-1,0,Math.PI*2);ctx.clip();
     // Linea tratteggiata → verde continua se direzione perfetta (±15°)
     const _angleDiff = Math.abs(((bearing - compassHeading) % 360 + 540) % 360 - 180);
     const _onTarget = _angleDiff < 15;
-    ctx.save();
+    // Linea visibile SOLO quando punto verso l'amico
     if (_onTarget) {
+      ctx.save();
       ctx.setLineDash([]);
+      // Gradiente dal centro (trasparente) al pallino (colore pieno)
+      const _lg = ctx.createLinearGradient(cx, cy, fx, fy);
+      _lg.addColorStop(0, hex2rgba(col, 0));
+      _lg.addColorStop(0.4, hex2rgba(col, 0.4));
+      _lg.addColorStop(1, hex2rgba(col, 0.95));
       ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);
-      ctx.strokeStyle=fc;ctx.lineWidth=2;
-      ctx.shadowColor=col;ctx.shadowBlur=8;
+      ctx.strokeStyle=_lg;ctx.lineWidth=2;
+      ctx.shadowColor=col;ctx.shadowBlur=10;
       ctx.stroke();ctx.shadowBlur=0;
-    } else {
-      ctx.setLineDash([3,6]);
-      ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(fx,fy);ctx.strokeStyle=fc+'55';ctx.lineWidth=1;ctx.stroke();
+      ctx.restore();
     }
-    ctx.restore();
     const isSOS=sosActiveId&&f.id===sosActiveId;
     const blink=isSOS&&(Date.now()%600<300);
     const dotColor=isSOS?'#ff3344':fc;
@@ -676,6 +679,21 @@ if(pAge<600){
       const ar = d2r(bearing - compassHeading) - Math.PI/2;
       const px2 = cx + rr*Math.cos(ar), py2 = cy + rr*Math.sin(ar);
       const shp = PIN_SHAPES.find(s=>s.id===p.shape)||PIN_SHAPES[7];
+      // Linea verso il pin SOLO quando si punta nella sua direzione
+      const _pAngleDiff = Math.abs(((bearing - compassHeading) % 360 + 540) % 360 - 180);
+      if(_pAngleDiff < 15 && !outside){
+        ctx.save();
+        ctx.setLineDash([]);
+        const _plg = ctx.createLinearGradient(cx, cy, px2, py2);
+        _plg.addColorStop(0, hex2rgba(p.color, 0));
+        _plg.addColorStop(0.4, hex2rgba(p.color, 0.35));
+        _plg.addColorStop(1, hex2rgba(p.color, 0.9));
+        ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(px2,py2);
+        ctx.strokeStyle=_plg;ctx.lineWidth=2;
+        ctx.shadowColor=p.color;ctx.shadowBlur=10;
+        ctx.stroke();ctx.shadowBlur=0;
+        ctx.restore();
+      }
       // Ombra morbida per leggibilità senza cerchio
       const emojiSize = outside ? 20 : 26;
       ctx.save();
