@@ -204,8 +204,15 @@ body{display:flex;flex-direction:column}
 
 /* BRIGHTNESS */
 body{transition:filter .3s;}
-.bright-btn{background:transparent;border:none;cursor:pointer;
-  padding:2px;line-height:0;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+#bright-btn{
+  position:absolute;top:10px;left:14px;z-index:10;
+  background:rgba(10,26,42,0.88);border:2px solid var(--ring);border-radius:50%;
+  width:40px;height:40px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;padding:2px;line-height:0;
+  transition:background .15s;
+}
+#bright-btn:active{background:rgba(0,192,255,0.18);}
 
 /* TIMER GRUPPO */
 #grp-timer{display:none;align-items:center;gap:6px;padding:4px 10px;
@@ -268,7 +275,7 @@ body{transition:filter .3s;}
     <div id="grp-timer"></div>
     <div class="mct" id="mct">1 membro</div>
     <div class="tacts">
-      <button class="bright-btn" id="bright-btn" onclick="cycleBrightness()" title="Luminosità"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="gm" x1="0" y1="1" x2="0" y2="0"><stop offset="50%" stop-color="#888"/><stop offset="50%" stop-color="#fbbf24"/></linearGradient></defs><path d="M12 2a7 7 0 0 0-4 12.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26A7 7 0 0 0 12 2z" fill="url(#gm)" stroke="#fbbf24" stroke-width="1.2"/><path d="M9 18h6M10 21h4" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+      
       <button class="tbtn" onclick="startAddPin()" title="Aggiungi posizione" style="font-size:18px">📍</button>
       <button class="tbtn" id="bell-btn" onclick="toggleNotifPanel()">
         🔔<div class="notif-badge" id="notif-badge">0</div>
@@ -297,6 +304,7 @@ body{transition:filter .3s;}
   </div>
   <div id="radar-wrap">
     <canvas id="cv"></canvas>
+    <button class="bright-btn" id="bright-btn" onclick="cycleBrightness()" title="Luminosità"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="gm" x1="0" y1="1" x2="0" y2="0"><stop offset="50%" stop-color="#888"/><stop offset="50%" stop-color="#fbbf24"/></linearGradient></defs><path d="M12 2a7 7 0 0 0-4 12.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26A7 7 0 0 0 12 2z" fill="url(#gm)" stroke="#fbbf24" stroke-width="1.2"/><path d="M9 18h6M10 21h4" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"/></svg></button>
     <button class="zoom-btn" id="zoom-out" onclick="event.stopPropagation();zoomOut()" ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()">−</button>
     <span id="zoom-lbl">200 m</span>
     <button class="zoom-btn" id="zoom-in"  onclick="event.stopPropagation();zoomIn()" ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()">+</button>
@@ -314,7 +322,6 @@ body{transition:filter .3s;}
   <div id="lista"></div>
   <div id="bb">
     <button class="sosB" id="sosB" onclick="triggerSOS()">🆘 SOS — Emergenza</button>
-    <button id="leave-btn" onclick="leaveGroup()" style="width:100%;margin-top:6px;padding:9px;border-radius:10px;border:1px solid var(--ring);background:transparent;color:var(--dim);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">🚪 Cancellami dal gruppo</button>
   </div>
 </div>
 
@@ -917,7 +924,7 @@ function deletePin(pinId){
 function publishPin(pin){
   if(!mqttClient) return;
   mqttClient.publish(`fc/${groupId}/pin/${myId}`,
-    JSON.stringify(pin), {retain:true, qos:1});
+    JSON.stringify(pin), {retain:true, qos:1, properties:{messageExpiryInterval:86400}});
 }
 function republishAllPins(){
   pins.filter(p=>p.ownerId===myId).forEach(p=>publishPin(p));
@@ -1029,7 +1036,7 @@ let _metaReceived = false;
 function publishGroupMeta(meta){
   if(!mqttClient) return;
   mqttClient.publish(`fc/${groupId}/meta`,
-    JSON.stringify(meta), {retain:true, qos:1});
+    JSON.stringify(meta), {retain:true, qos:1, properties:{messageExpiryInterval:86400}});
 }
 
 // Legge la meta ricevuta via MQTT
@@ -1097,7 +1104,7 @@ function selfDestructClean(){
     // Se creatore, cancella anche meta e segnala scadenza
     if(groupMeta && groupMeta.creatorId === myId){
       mqttClient.publish(`fc/${groupId}/meta`,
-        JSON.stringify({expired:true, expiresAt:0}), {retain:true, qos:1});
+        JSON.stringify({expired:true, expiresAt:0}), {retain:true, qos:1, properties:{messageExpiryInterval:3600}});
       setTimeout(()=>{
         mqttClient.publish(`fc/${groupId}/meta`, e, {retain:true,qos:1});
       }, 500);
@@ -1414,7 +1421,7 @@ function connectMQTT(){
   });
   mqttClient.on('offline',()=>showToast('⚠️ Connessione persa…'));
 }
-function publishMember(){if(!mqttClient)return;saveIdentity();const payload={name:myName,color:myColor,online:true,joinTs:myJoinTs};if(groupName)payload.groupName=groupName;mqttClient.publish(`fc/${groupId}/member/${myId}`,JSON.stringify(payload),{retain:true,qos:1});}
+function publishMember(){if(!mqttClient)return;saveIdentity();const payload={name:myName,color:myColor,online:true,joinTs:myJoinTs};if(groupName)payload.groupName=groupName;mqttClient.publish(`fc/${groupId}/member/${myId}`,JSON.stringify(payload),{retain:true,qos:1,properties:{messageExpiryInterval:86400}});}
 function publishPos(){
   if(!mqttClient||myLat===null)return;
   // Rate limiting: pubblica solo se spostato ≥5m dall'ultimo invio
@@ -1423,7 +1430,7 @@ function publishPos(){
     if(moved<5)return;
   }
   lastPubLat=myLat;lastPubLon=myLon;
-  mqttClient.publish(`fc/${groupId}/pos/${myId}`,JSON.stringify({lat:myLat,lon:myLon,ts:Date.now(),acc:myAcc}),{retain:true,qos:0});
+  mqttClient.publish(`fc/${groupId}/pos/${myId}`,JSON.stringify({lat:myLat,lon:myLon,ts:Date.now(),acc:myAcc}),{retain:true,qos:0,properties:{messageExpiryInterval:86400}});
 }
 function removeMQTT(){
   if(!mqttClient)return;
