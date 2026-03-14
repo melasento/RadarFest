@@ -206,6 +206,22 @@ body{display:flex;flex-direction:column}
 body{transition:filter .3s;}
 .bright-btn{background:transparent;border:none;cursor:pointer;
   padding:2px;line-height:0;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+
+/* TIMER GRUPPO */
+#grp-timer{display:none;align-items:center;gap:6px;padding:4px 10px;
+  background:rgba(255,60,0,0.15);border:1px solid #ff3c0055;
+  border-radius:8px;font-size:11px;font-weight:700;color:#ff6030;cursor:default;}
+#grp-timer.warn{background:rgba(255,0,0,0.2);border-color:#ff000099;color:#ff3333;
+  animation:timerPulse .9s ease-in-out infinite;}
+@keyframes timerPulse{0%,100%{opacity:1}50%{opacity:.5}}
+#grp-timer .ext-btn{background:#ff6030;color:#fff;border:none;border-radius:6px;
+  padding:2px 7px;font-size:10px;font-weight:800;cursor:pointer;font-family:inherit;margin-left:4px;}
+/* OVERLAY GRUPPO SCADUTO */
+#expired-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:999;
+  display:none;align-items:center;justify-content:center;flex-direction:column;gap:18px;}
+#expired-overlay.show{display:flex;}
+.exp-title{font-size:22px;font-weight:900;color:#ff3333;}
+.exp-sub{font-size:13px;color:var(--dim);text-align:center;padding:0 30px;line-height:1.6;}
 </style>
 </head>
 <body>
@@ -249,6 +265,7 @@ body{transition:filter .3s;}
     <div class="dvd"></div>
     <div class="gnm" id="gnm">Gruppo</div>
     <div class="cbdg" id="cbdg" onclick="copyCode()">—</div>
+    <div id="grp-timer"></div>
     <div class="mct" id="mct">1 membro</div>
     <div class="tacts">
       <button class="bright-btn" id="bright-btn" onclick="cycleBrightness()" title="Luminosità"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="gm" x1="0" y1="1" x2="0" y2="0"><stop offset="50%" stop-color="#888"/><stop offset="50%" stop-color="#fbbf24"/></linearGradient></defs><path d="M12 2a7 7 0 0 0-4 12.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26A7 7 0 0 0 12 2z" fill="url(#gm)" stroke="#fbbf24" stroke-width="1.2"/><path d="M9 18h6M10 21h4" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"/></svg></button>
@@ -297,6 +314,7 @@ body{transition:filter .3s;}
   <div id="lista"></div>
   <div id="bb">
     <button class="sosB" id="sosB" onclick="triggerSOS()">🆘 SOS — Emergenza</button>
+    <button id="leave-btn" onclick="leaveGroup()" style="width:100%;margin-top:6px;padding:9px;border-radius:10px;border:1px solid var(--ring);background:transparent;color:var(--dim);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">🚪 Cancellami dal gruppo</button>
   </div>
 </div>
 
@@ -480,6 +498,7 @@ function startCreate(){
   buildPicker();show('s-name');
   setTimeout(()=>document.getElementById('name-inp').focus(),80);
 }
+let _pendingCreator=false; // flag: questo client ha creato il gruppo
 function startJoin(){
   const c=document.getElementById('code-inp').value.trim().toUpperCase();
   if(c.length<4){showToast('⚠️ Codice non valido');return;}
@@ -502,6 +521,7 @@ function confirmName(){
   document.getElementById('name-hint').style.display='none';
   myName=n;myColor=selColor;myId=uid();
   saveIdentity();
+  _pendingCreator=true;
   enterGroup();
 }
 function enterGroup(){
@@ -996,6 +1016,150 @@ function applyBrightness(){
     window.addEventListener('DOMContentLoaded', applyBrightness);
   }
 })();
+
+// ══════════════════════════════════════════
+// GRUPPO LIFETIME (24h)
+// ══════════════════════════════════════════
+const GROUP_DURATION = 24 * 3600 * 1000; // 24h in ms
+let groupMeta = null;   // {createdAt, expiresAt, creatorId}
+let _timerIv  = null;
+let _metaReceived = false;
+
+// Pubblica meta (solo il creatore alla creazione o all'estensione)
+function publishGroupMeta(meta){
+  if(!mqttClient) return;
+  mqttClient.publish(`fc/${groupId}/meta`,
+    JSON.stringify(meta), {retain:true, qos:1});
+}
+
+// Legge la meta ricevuta via MQTT
+function applyGroupMeta(data){
+  groupMeta = data;
+  _metaReceived = true;
+  if(data.expiresAt <= Date.now()){
+    triggerGroupExpiry(false); // già scaduto
+    return;
+  }
+  startGroupTimer();
+}
+
+// Timer countdown
+function startGroupTimer(){
+  if(_timerIv) clearInterval(_timerIv);
+  _timerIv = setInterval(()=>{
+    if(!groupMeta) return;
+    const rem = groupMeta.expiresAt - Date.now();
+    if(rem <= 0){ clearInterval(_timerIv); triggerGroupExpiry(true); return; }
+    const el = document.getElementById('grp-timer');
+    if(!el) return;
+    if(rem <= 3600000){ // < 1 ora: mostra timer
+      el.style.display = 'flex';
+      const m = Math.floor(rem/60000), s = Math.floor((rem%60000)/1000);
+      const warn = rem < 600000; // < 10 min: pulsante estendi
+      const isCreator = groupMeta.creatorId === myId;
+      el.className = warn ? 'warn' : '';
+      el.innerHTML = '⏱ ' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0')
+        + (isCreator ? '<button class="ext-btn" onclick="extendGroup()">+24h</button>' : '');
+    } else {
+      el.style.display = 'none';
+    }
+  }, 1000);
+}
+
+// Estende di 24h (solo creatore)
+function extendGroup(){
+  if(!groupMeta || groupMeta.creatorId !== myId){
+    showToast('⚠️ Solo il creatore può estendere il gruppo'); return;
+  }
+  groupMeta.expiresAt = Date.now() + GROUP_DURATION;
+  publishGroupMeta(groupMeta);
+  showToast('✅ Gruppo esteso di altre 24 ore!');
+}
+
+// Scadenza: ogni client distrugge i propri dati e va alla home
+function triggerGroupExpiry(announce){
+  clearInterval(_timerIv);
+  // Ogni client pulisce se stesso
+  selfDestructClean();
+  // Mostra overlay scaduto
+  document.getElementById('expired-overlay').classList.add('show');
+}
+
+// Pulizia completa propria (usata sia da expiry sia da leaveGroup)
+function selfDestructClean(){
+  // Ferma GPS e MQTT
+  if(gpsWatch) navigator.geolocation.clearWatch(gpsWatch);
+  // Cancella retained propri dal broker
+  if(mqttClient){
+    const e = new Uint8Array(0);
+    mqttClient.publish(`fc/${groupId}/member/${myId}`, e, {retain:true,qos:1});
+    mqttClient.publish(`fc/${groupId}/pos/${myId}`,    e, {retain:true,qos:1});
+    // Se creatore, cancella anche meta e segnala scadenza
+    if(groupMeta && groupMeta.creatorId === myId){
+      mqttClient.publish(`fc/${groupId}/meta`,
+        JSON.stringify({expired:true, expiresAt:0}), {retain:true, qos:1});
+      setTimeout(()=>{
+        mqttClient.publish(`fc/${groupId}/meta`, e, {retain:true,qos:1});
+      }, 500);
+    }
+    mqttClient.end();
+  }
+  mqttClient = null;
+  // Pulisce localStorage per questo gruppo
+  localStorage.removeItem('rfid_'+groupId);
+  localStorage.removeItem('rfpins_'+groupId);
+  friends={}; predMap={}; smoothFriendPos={}; pins=[];
+  myLat=null; myLon=null; groupMeta=null; _metaReceived=false;
+}
+
+// Cancellami dal gruppo (esce e rimuove dati propri, gruppo continua)
+function leaveGroup(){
+  if(!confirm('Vuoi uscire e cancellare la tua posizione dal gruppo?')) return;
+  selfDestructClean();
+  hardReset();
+}
+
+// Reset completo → landing
+function hardReset(){
+  document.getElementById('expired-overlay').classList.remove('show');
+  groupId=null; groupMeta=null; _metaReceived=false; myName=''; myId=null;
+  friends={}; predMap={}; smoothFriendPos={}; pins=[];
+  show('s-landing');
+}
+
+// ══════════════════════════════════════════
+// PULIZIA GRUPPI PRECEDENTI (al boot)
+// ══════════════════════════════════════════
+function clearOldGroups(){
+  const keys = Object.keys(localStorage).filter(k=>k.startsWith('rfid_'));
+  if(!keys.length) return;
+  const tmpId = 'cleanup_'+Date.now();
+  const cl = mqtt.connect(BROKER,{clientId:tmpId,clean:true,reconnectPeriod:0,connectTimeout:8000});
+  cl.on('connect',()=>{
+    const e = new Uint8Array(0);
+    keys.forEach(k=>{
+      const gid = k.replace('rfid_','');
+      let identity;
+      try{ identity = JSON.parse(localStorage.getItem(k)||'null'); }catch(ex){}
+      if(identity && identity.id){
+        cl.publish(`fc/${gid}/member/${identity.id}`, e, {retain:true,qos:1});
+        cl.publish(`fc/${gid}/pos/${identity.id}`,    e, {retain:true,qos:1});
+      }
+      // Pulisci i pin di questo gruppo
+      try{
+        const pinsData = JSON.parse(localStorage.getItem('rfpins_'+gid)||'[]');
+        pinsData.forEach(p=>{
+          if(p.ownerId===identity?.id)
+            cl.publish(`fc/${gid}/pin/${p.id}`, e, {retain:true,qos:1});
+        });
+      }catch(ex){}
+      localStorage.removeItem(k);
+      localStorage.removeItem('rfpins_'+gid);
+    });
+    setTimeout(()=>cl.end(), 2000);
+  });
+  cl.on('error',()=>{ keys.forEach(k=>localStorage.removeItem(k)); cl.end(); });
+}
 // LOOP
 // ══════════════════════════════════
 let prevT=0;
@@ -1151,10 +1315,32 @@ setInterval(()=>{
 // ══════════════════════════════════
 function connectMQTT(){
   mqttClient=mqtt.connect(BROKER,{clientId:'fc_'+myId,clean:true,reconnectPeriod:3000,keepalive:30});
-  mqttClient.on('connect',()=>{mqttClient.subscribe(`fc/${groupId}/#`);publishMember();showToast('🎉 Nel gruppo '+groupId);});
+  mqttClient.on('connect',()=>{
+    mqttClient.subscribe(`fc/${groupId}/#`);
+    publishMember();
+    showToast('🎉 Nel gruppo '+groupId);
+    // Se nuovo creatore: pubblica meta con scadenza 24h
+    if(_pendingCreator){
+      _pendingCreator=false;
+      const now=Date.now();
+      const meta={createdAt:now,expiresAt:now+GROUP_DURATION,creatorId:myId,groupName:groupName};
+      publishGroupMeta(meta);
+      applyGroupMeta(meta);
+    }
+  });
   mqttClient.on('message',(topic,payload)=>{
     try{
       const pts=topic.split('/'),type=pts[2],uid2=pts[3];
+      // Topic meta: scadenza gruppo
+      if(type==='meta'){
+        if(!raw.trim()) return; // retained pulito
+        const mdata=JSON.parse(raw);
+        if(mdata.expired || (mdata.expiresAt && mdata.expiresAt<=Date.now())){
+          triggerGroupExpiry(false); return;
+        }
+        if(mdata.expiresAt) applyGroupMeta(mdata);
+        return;
+      }
       if(uid2===myId)return;
       const raw=payload.toString();
       if(!raw.trim()){// Payload vuoto = utente rimosso dal broker
@@ -1492,6 +1678,7 @@ function showToast(m){const t=document.getElementById('toast');t.textContent=m;t
 // AUTO-JOIN
 // ══════════════════════════════════
 window.addEventListener('DOMContentLoaded',()=>{
+  clearOldGroups();
   const c=new URLSearchParams(location.search).get('group');
   if(c){
     groupId=c.toUpperCase();
@@ -1543,6 +1730,17 @@ window.addEventListener('DOMContentLoaded',()=>{
   <button onclick="skipAcquire()" style="margin-top:8px;background:transparent;border:1px solid var(--ring);
     color:var(--dim);border-radius:8px;padding:6px 18px;font-size:12px;cursor:pointer;font-family:inherit">
     Usa posizione attuale
+  </button>
+</div>
+
+<!-- OVERLAY GRUPPO SCADUTO -->
+<div id="expired-overlay">
+  <div style="font-size:48px">⏰</div>
+  <div class="exp-title">Gruppo scaduto</div>
+  <div class="exp-sub">Le 24 ore sono terminate.<br>Tutti i dati del gruppo sono stati eliminati.<br>Crea un nuovo gruppo per ricominciare.</div>
+  <button onclick="hardReset()" style="padding:12px 30px;border-radius:12px;background:var(--cyan);
+    border:none;color:#000;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;">
+    Torna alla home
   </button>
 </div>
 </body>
