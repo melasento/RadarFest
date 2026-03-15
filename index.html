@@ -5,14 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
 <meta name="screen-orientation" content="portrait">
 <title>Radar Fest</title>
-
-<!-- PWA: installabile su home screen (Android/iOS) -->
-<meta name="theme-color" content="#050813"/>
-<meta name="mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<meta name="apple-mobile-web-app-title" content="Radar Fest"/>
-<link id="pwa-manifest" rel="manifest"/>
 <script src="https://unpkg.com/mqtt@5/dist/mqtt.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -584,21 +576,9 @@ function enterGroup(){
   }
   // Chiedi permesso SOS ad OGNI entrata nel gruppo
   setTimeout(()=>{
-    try {
-      const perm = ('Notification' in window) ? Notification.permission : 'unsupported';
-      if(perm === 'granted'){
-        _initSOSBackend(); // già concesso: reinizializza silenziosamente
-      } else if(perm === 'denied'){
-        // Permesso già negato dall'utente: mostra overlay con istruzioni sblocco
-        const sub = document.querySelector('#sos-perm-modal .spm-sub');
-        if(sub) sub.innerHTML = "Il permesso notifiche è <b style='color:var(--red)'>bloccato</b>.<br>Vai su <b>Impostazioni Chrome → Notifiche</b> e riattivalo per questo sito.<br><br>Il SOS funzionerà solo con l'app aperta.";
-        document.getElementById('sos-perm-overlay').classList.add('show');
-      } else {
-        // 'default' o 'unsupported': mostra overlay normale
-        document.getElementById('sos-perm-overlay').classList.add('show');
-      }
-    } catch(e) {
-      // Notification non supportato (HTTP, vecchio browser): mostra overlay informativo
+    if(Notification.permission==='granted'){
+      _initSOSBackend(); // già concesso: reinizializza silenziosamente
+    } else {
       document.getElementById('sos-perm-overlay').classList.add('show');
     }
   }, 1200);
@@ -1255,11 +1235,7 @@ function clearOldGroups(){
 let prevT=0;
 let lastInteract=Date.now();
 ['touchstart','touchmove','click','pointermove'].forEach(ev=>
-  document.addEventListener(ev,()=>{
-    lastInteract=Date.now();
-    // Sblocca AudioContext al primo gesto utente — fix autoplay policy Chrome/Safari/iOS
-    if(!_bgAudioCtx||_bgAudioCtx.state==='suspended') _unlockAudio(true);
-  },{passive:true})
+  document.addEventListener(ev,()=>lastInteract=Date.now(),{passive:true})
 );
 function loop(t){
   const dt=Math.min((t-prevT)/1000,0.1);prevT=t;
@@ -1484,6 +1460,12 @@ function connectMQTT(){
         // Ricevo SOS da un amico
         const nm=data.name||friends[uid2]?.name||'Un amico';
         startSOSAlert(nm,uid2);
+      }else if(type==='soscancel'){
+        // Il mittente ha annullato il suo SOS
+        if(sosActiveId===uid2){
+          stopSOSAlert();
+          showToast('✅ SOS annullato da '+(data.name||'mittente'));
+        }
       }else if(type==='sosack'){
         // Ferma l'alert SOS su TUTTI i dispositivi del gruppo
         if(sosActiveId){
@@ -1508,19 +1490,6 @@ function connectMQTT(){
   });
   mqttClient.on('offline',()=>showToast('⚠️ Connessione persa…'));
 }
-// Riconnessione MQTT quando la pagina torna in foreground (fix Android background kill)
-document.addEventListener('visibilitychange', ()=>{
-  if(document.visibilityState === 'visible' && groupId){
-    if(!mqttClient || !mqttClient.connected){
-      showToast('🔄 Riconnessione…');
-      connectMQTT();
-    }
-    // Tenta di riprendere l'AudioContext se sospeso
-    if(_bgAudioCtx && _bgAudioCtx.state === 'suspended') _bgAudioCtx.resume().catch(()=>{});
-  }
-});
-
-
 function publishMember(){if(!mqttClient)return;saveIdentity();const payload={name:myName,color:myColor,online:true,joinTs:myJoinTs};if(groupName)payload.groupName=groupName;mqttClient.publish(`fc/${groupId}/member/${myId}`,JSON.stringify(payload),{retain:true,qos:1,properties:{messageExpiryInterval:86400}});}
 function publishPos(){
   if(!mqttClient||myLat===null)return;
@@ -1551,10 +1520,40 @@ function triggerSOS(){
   if(!confirm('🚨 Inviare SOS a tutti gli amici del gruppo?\n\nUsare solo in caso di emergenza reale.'))return;
   if(!mqttClient){showToast('⚠️ Non connesso');return;}
   mqttClient.publish(`fc/${groupId}/sos/${myId}`,JSON.stringify({name:myName,ts:Date.now()}),{retain:false,qos:1});
-  document.getElementById('sosB').classList.add('active');
-  document.getElementById('sosB').textContent='🆘 SOS inviato';
+  _setSosButtonCancel(); // bottone diventa "Annulla SOS" per tutta la durata
   showToast('🚨 SOS inviato a tutti!');
-  setTimeout(()=>{document.getElementById('sosB').classList.remove('active');document.getElementById('sosB').textContent='🆘 SOS';},10000);
+  // Auto-reset dopo SOS_DURATION secondi (uguale al countdown dei riceventi)
+  clearTimeout(sosTimer);
+  sosTimer=setTimeout(()=>_resetSOSButton(), SOS_DURATION*1000);
+}
+
+function _setSosButtonCancel(){
+  const btn=document.getElementById('sosB');
+  btn.classList.add('active');
+  btn.innerHTML='🛑 Annulla SOS';
+  btn.onclick=cancelMySOS;
+}
+
+function _resetSOSButton(){
+  clearTimeout(sosTimer);
+  const btn=document.getElementById('sosB');
+  btn.classList.remove('active');
+  btn.innerHTML='🆘 SOS — Emergenza';
+  btn.onclick=triggerSOS;
+}
+
+function cancelMySOS(){
+  if(!confirm('Annullare il SOS? Gli altri dispositivi smetteranno di suonare.'))return;
+  // Pubblica soscancel: tipo dedicato, non confondibile con sosack (risposta di aiuto)
+  if(mqttClient){
+    mqttClient.publish(
+      `fc/${groupId}/soscancel/${myId}`,
+      JSON.stringify({name:myName,ts:Date.now()}),
+      {retain:false,qos:1}
+    );
+  }
+  _resetSOSButton();
+  showToast('✅ SOS annullato');
 }
 
 function startSOSAlert(senderName,senderId){
@@ -1578,7 +1577,8 @@ function startSOSAlert(senderName,senderId){
     updateSOSCountdown();
     if(sosCountdown<=0){clearInterval(sosCdInterval);autoStopSOS(senderName);}
   },1000);
-  // Vibrazione continua
+  // Vibrazione continua — clear preventivo per evitare doppio intervallo
+  if(sosVibInterval){ clearInterval(sosVibInterval); sosVibInterval=null; }
   if(navigator.vibrate){
     navigator.vibrate([600,200,600,200,600]);
     sosVibInterval=setInterval(()=>navigator.vibrate([600,200,600,200,600]),2500);
@@ -1586,12 +1586,9 @@ function startSOSAlert(senderName,senderId){
   // Audio — usa il contesto globale già sbloccato (funziona con schermo spento)
   try{
     sosAudioCtx = _bgAudioCtx || new(window.AudioContext||window.webkitAudioContext)();
-    // resume() è asincrono: aspetta la Promise prima di suonare
-    const _resumeP = sosAudioCtx.state==='suspended'
-      ? sosAudioCtx.resume()
-      : Promise.resolve();
+    if(sosAudioCtx.state==='suspended') sosAudioCtx.resume();
     function beep(){
-      if(!sosAudioCtx||sosAudioCtx.state!=='running')return;
+      if(!sosAudioCtx)return;
       const o=sosAudioCtx.createOscillator();
       const g=sosAudioCtx.createGain();
       o.connect(g);g.connect(sosAudioCtx.destination);
@@ -1600,7 +1597,8 @@ function startSOSAlert(senderName,senderId){
       g.gain.exponentialRampToValueAtTime(0.001,sosAudioCtx.currentTime+0.45);
       o.start(sosAudioCtx.currentTime);o.stop(sosAudioCtx.currentTime+0.45);
     }
-    _resumeP.then(()=>{ beep(); sosAudioInterval=setInterval(beep,700); }).catch(()=>{});
+    beep();
+    sosAudioInterval=setInterval(beep,700);
   }catch(e){}
 }
 function updateSOSCountdown(){
@@ -1610,8 +1608,11 @@ function updateSOSCountdown(){
 function stopSOSAlert(){
   document.getElementById('sos-banner').style.display='none';
   _stopSOSRing(); // ferma notifiche sistema
-  clearInterval(sosVibInterval);clearInterval(sosCdInterval);
-  if(navigator.vibrate)navigator.vibrate(0);
+  // Ferma vibrazione in modo hard: null l'intervallo PRIMA di clearInterval
+  // e chiama vibrate([]) + vibrate(0) (doppio per Samsung/Android aggressivi)
+  const _vi=sosVibInterval; sosVibInterval=null;
+  clearInterval(_vi); clearInterval(sosCdInterval);
+  if(navigator.vibrate){ navigator.vibrate([]); navigator.vibrate(0); }
   // Ferma solo gli oscillatori SOS, NON il contesto globale
   clearInterval(sosAudioInterval); sosAudioInterval=null;
   if(sosAudioCtx && sosAudioCtx!==_bgAudioCtx){
@@ -1789,7 +1790,7 @@ function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsWatch)navigator.geoloc
 // TOAST
 // ══════════════════════════════════
 let tT;
-function showToast(m, dur=2800){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),dur);}
+function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),2800);}
 
 // ══════════════════════════════════
 // AUTO-JOIN
@@ -1812,26 +1813,13 @@ window.addEventListener('DOMContentLoaded',()=>{
 
 // --- Service Worker inline ---
 const _SW_SRC=`
-const CACHE='radarfest-v1';
-self.addEventListener('install',e=>{
-  self.skipWaiting();
-  // Metti in cache la pagina stessa per avvio offline
-  e.waitUntil(caches.open(CACHE).then(c=>c.add(self.registration.scope)).catch(()=>{}));
-});
+self.addEventListener('install',()=>self.skipWaiting());
 self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
-self.addEventListener('fetch',e=>{
-  // Cache-first SOLO per la pagina principale (scope), resto normale
-  if(e.request.mode==='navigate'){
-    e.respondWith(
-      fetch(e.request).catch(()=>caches.match(e.request))
-    );
-  }
-});
 self.addEventListener('notificationclick',e=>{
   e.notification.close();
   e.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(cs=>{
-    const w=cs.find(c=>c.url&&c.url.startsWith(self.registration.scope));
-    return w?w.focus():self.clients.openWindow(self.registration.scope);
+    const w=cs.find(c=>c.url&&c.url.startsWith(self.location.origin));
+    return w?w.focus():self.clients.openWindow('/');
   }));
 });
 self.addEventListener('message',e=>{if(e.data==='ping')e.source?.postMessage('pong');});
@@ -1846,85 +1834,16 @@ async function _initSW(){
     _swReg=await navigator.serviceWorker.register(URL.createObjectURL(blob));
   }catch(e){_swReg=null;}
 }
-
-// ══════════════════════════════════
-// PWA — MANIFEST INLINE + INSTALL PROMPT
-// ══════════════════════════════════
-(function _injectManifest(){
-  // Icona SVG radar 192×192 codificata inline (no file esterno)
-  const svg192 = `<svg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%23050813'/><circle cx='96' cy='96' r='70' stroke='%231a3a4a' stroke-width='2' fill='none'/><circle cx='96' cy='96' r='46' stroke='%231a3a4a' stroke-width='1.5' fill='none'/><circle cx='96' cy='96' r='23' stroke='%231a3a4a' stroke-width='1' fill='none'/><line x1='96' y1='26' x2='96' y2='96' stroke='%2300e87a' stroke-width='2'/><polygon points='96,22 90,34 102,34' fill='%2300e87a'/><circle cx='96' cy='96' r='6' fill='%2300e87a'/><circle cx='130' cy='68' r='7' fill='%2300c0ff'/><circle cx='72' cy='118' r='6' fill='%23ffa040'/></svg>`;
-  const svg512 = svg192.replace(/width='192'/g,"width='512'").replace(/height='192'/g,"height='512'").replace(/width='192'/g,"width='512'").replace(/height='192'/g,"height='512'").replace("viewBox='0 0 192 192'","viewBox='0 0 192 192'");
-  const toDataUrl = svg => 'data:image/svg+xml,' + svg;
-
-  const manifest = {
-    name: 'Radar Fest',
-    short_name: 'RadarFest',
-    description: 'Trova i tuoi amici in tempo reale',
-    start_url: location.href.split('?')[0],
-    display: 'standalone',
-    orientation: 'portrait',
-    background_color: '#050813',
-    theme_color: '#050813',
-    icons: [
-      { src: toDataUrl(svg192), sizes: '192x192', type: 'image/svg+xml', purpose: 'any maskable' },
-      { src: toDataUrl(svg192.replace(/192/g,'512')), sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' }
-    ]
-  };
-  const blob = new Blob([JSON.stringify(manifest)], {type:'application/manifest+json'});
-  const url  = URL.createObjectURL(blob);
-  document.getElementById('pwa-manifest').href = url;
-})();
-
-// Install prompt (Android Chrome mostra il banner "Aggiungi a home screen")
-let _deferredInstallPrompt = null;
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  _deferredInstallPrompt = e;
-  // Mostra pulsante di installazione nella topbar dopo 2s
-  setTimeout(_showInstallBtn, 2000);
-});
-window.addEventListener('appinstalled', () => {
-  _deferredInstallPrompt = null;
-  _hideInstallBtn();
-  showToast('✅ Radar Fest aggiunto alla home screen!');
-});
-
-function _showInstallBtn(){
-  let btn = document.getElementById('pwa-install-btn');
-  if(btn || !_deferredInstallPrompt) return;
-  btn = document.createElement('button');
-  btn.id = 'pwa-install-btn';
-  btn.className = 'tbtn';
-  btn.title = 'Aggiungi a home screen';
-  btn.style.cssText = 'font-size:17px;animation:sosPulse 2s infinite;background:rgba(0,200,100,0.15);color:var(--green)';
-  btn.textContent = '📲';
-  btn.onclick = async ()=>{
-    if(!_deferredInstallPrompt) return;
-    _deferredInstallPrompt.prompt();
-    const { outcome } = await _deferredInstallPrompt.userChoice;
-    if(outcome === 'accepted') _deferredInstallPrompt = null;
-    _hideInstallBtn();
-  };
-  document.querySelector('.tacts')?.prepend(btn);
-}
-function _hideInstallBtn(){
-  document.getElementById('pwa-install-btn')?.remove();
-}
 function _startSWKeepalive(){
   if(_swKaIv)clearInterval(_swKaIv);
-  _swKaIv=setInterval(()=>{
-    // postMessage + fetch ping: doppia strategia per Samsung/Android aggressivi
-    navigator.serviceWorker?.controller?.postMessage('ping');
-    // fetch su URL stesso sito (no-cors, non blocca) per tenere vivo il SW su Android
-    if(_swReg) fetch(location.href, {method:'HEAD', cache:'no-store'}).catch(()=>{});
-  }, 8000); // 8s invece di 20s: più resiliente su Samsung con battery opt
+  _swKaIv=setInterval(()=>navigator.serviceWorker?.controller?.postMessage('ping'),20000);
 }
 function _stopSWKeepalive(){
   if(_swKaIv){clearInterval(_swKaIv);_swKaIv=null;}
 }
 
 // --- AudioContext globale: sbloccato da gesto utente, tenuto vivo da loop silenzioso ---
-function _unlockAudio(silent=false){
+function _unlockAudio(){
   if(_bgAudioCtx){
     if(_bgAudioCtx.state==='suspended') _bgAudioCtx.resume();
     return;
@@ -1939,19 +1858,16 @@ function _unlockAudio(silent=false){
     gain.gain.value=0.0001; // praticamente inudibile
     src.connect(gain); gain.connect(_bgAudioCtx.destination);
     src.start();
-    // Beep di conferma solo se esplicito E il context è già "running"
-    // (se è "suspended" il browser ha bloccato: non tentare, evita l'errore)
-    if(!silent && _bgAudioCtx.state==='running'){
-      setTimeout(()=>{
-        const o=_bgAudioCtx.createOscillator();
-        const g=_bgAudioCtx.createGain();
-        o.connect(g); g.connect(_bgAudioCtx.destination);
-        o.type='sine'; o.frequency.value=660;
-        g.gain.setValueAtTime(0.25,_bgAudioCtx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.001,_bgAudioCtx.currentTime+0.35);
-        o.start(_bgAudioCtx.currentTime); o.stop(_bgAudioCtx.currentTime+0.35);
-      },80);
-    }
+    // Beep di conferma (audio sbloccato!)
+    setTimeout(()=>{
+      const o=_bgAudioCtx.createOscillator();
+      const g=_bgAudioCtx.createGain();
+      o.connect(g); g.connect(_bgAudioCtx.destination);
+      o.type='sine'; o.frequency.value=660;
+      g.gain.setValueAtTime(0.25,_bgAudioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001,_bgAudioCtx.currentTime+0.35);
+      o.start(_bgAudioCtx.currentTime); o.stop(_bgAudioCtx.currentTime+0.35);
+    },80);
   }catch(e){}
 }
 
@@ -1965,23 +1881,9 @@ async function _initSOSBackend(){
 // --- Dialog permesso SOS ---
 function acceptSOSPerm(){
   document.getElementById('sos-perm-overlay').classList.remove('show');
-  if(!('Notification' in window)){
-    showToast('⚠️ Notifiche non supportate: SOS solo in foreground');
-    return;
-  }
   Notification.requestPermission().then(p=>{
-    if(p==='granted'){
-      _initSOSBackend();
-      // Su Android/Samsung: avvisa di disabilitare ottimizzazione batteria
-      const isAndroid = /android/i.test(navigator.userAgent);
-      if(isAndroid){
-        setTimeout(()=>{
-          showToast('⚡ Per ricevere SOS in background: disabilita ottimizzazione batteria per Chrome nelle Impostazioni!', 6000);
-        }, 1500);
-      }
-    } else {
-      showToast('⚠️ Permesso negato: SOS solo in foreground');
-    }
+    if(p==='granted') _initSOSBackend();
+    else showToast('⚠️ Permesso negato: SOS solo in foreground');
   });
 }
 function denySOSPerm(){
