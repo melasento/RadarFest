@@ -576,9 +576,21 @@ function enterGroup(){
   }
   // Chiedi permesso SOS ad OGNI entrata nel gruppo
   setTimeout(()=>{
-    if(Notification.permission==='granted'){
-      _initSOSBackend(); // già concesso: reinizializza silenziosamente
-    } else {
+    try {
+      const perm = ('Notification' in window) ? Notification.permission : 'unsupported';
+      if(perm === 'granted'){
+        _initSOSBackend(); // già concesso: reinizializza silenziosamente
+      } else if(perm === 'denied'){
+        // Permesso già negato dall'utente: mostra overlay con istruzioni sblocco
+        const sub = document.querySelector('#sos-perm-modal .spm-sub');
+        if(sub) sub.innerHTML = 'Il permesso notifiche è <b style="color:var(--red)">bloccato</b>.<br>Vai su <b>Impostazioni Chrome → Notifiche</b> e riattivalo per questo sito.<br><br>Il SOS funzionerà solo con l'app aperta.';
+        document.getElementById('sos-perm-overlay').classList.add('show');
+      } else {
+        // 'default' o 'unsupported': mostra overlay normale
+        document.getElementById('sos-perm-overlay').classList.add('show');
+      }
+    } catch(e) {
+      // Notification non supportato (HTTP, vecchio browser): mostra overlay informativo
       document.getElementById('sos-perm-overlay').classList.add('show');
     }
   }, 1200);
@@ -1488,6 +1500,19 @@ function connectMQTT(){
   });
   mqttClient.on('offline',()=>showToast('⚠️ Connessione persa…'));
 }
+// Riconnessione MQTT quando la pagina torna in foreground (fix Android background kill)
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'visible' && groupId){
+    if(!mqttClient || !mqttClient.connected){
+      showToast('🔄 Riconnessione…');
+      connectMQTT();
+    }
+    // Tenta di riprendere l'AudioContext se sospeso
+    if(_bgAudioCtx && _bgAudioCtx.state === 'suspended') _bgAudioCtx.resume().catch(()=>{});
+  }
+});
+
+
 function publishMember(){if(!mqttClient)return;saveIdentity();const payload={name:myName,color:myColor,online:true,joinTs:myJoinTs};if(groupName)payload.groupName=groupName;mqttClient.publish(`fc/${groupId}/member/${myId}`,JSON.stringify(payload),{retain:true,qos:1,properties:{messageExpiryInterval:86400}});}
 function publishPos(){
   if(!mqttClient||myLat===null)return;
@@ -1756,7 +1781,7 @@ function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsWatch)navigator.geoloc
 // TOAST
 // ══════════════════════════════════
 let tT;
-function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),2800);}
+function showToast(m, dur=2800){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),dur);}
 
 // ══════════════════════════════════
 // AUTO-JOIN
@@ -1802,7 +1827,12 @@ async function _initSW(){
 }
 function _startSWKeepalive(){
   if(_swKaIv)clearInterval(_swKaIv);
-  _swKaIv=setInterval(()=>navigator.serviceWorker?.controller?.postMessage('ping'),20000);
+  _swKaIv=setInterval(()=>{
+    // postMessage + fetch ping: doppia strategia per Samsung/Android aggressivi
+    navigator.serviceWorker?.controller?.postMessage('ping');
+    // fetch su URL stesso sito (no-cors, non blocca) per tenere vivo il SW su Android
+    if(_swReg) fetch(location.href, {method:'HEAD', cache:'no-store'}).catch(()=>{});
+  }, 8000); // 8s invece di 20s: più resiliente su Samsung con battery opt
 }
 function _stopSWKeepalive(){
   if(_swKaIv){clearInterval(_swKaIv);_swKaIv=null;}
@@ -1850,9 +1880,23 @@ async function _initSOSBackend(){
 // --- Dialog permesso SOS ---
 function acceptSOSPerm(){
   document.getElementById('sos-perm-overlay').classList.remove('show');
+  if(!('Notification' in window)){
+    showToast('⚠️ Notifiche non supportate: SOS solo in foreground');
+    return;
+  }
   Notification.requestPermission().then(p=>{
-    if(p==='granted') _initSOSBackend();
-    else showToast('⚠️ Permesso negato: SOS solo in foreground');
+    if(p==='granted'){
+      _initSOSBackend();
+      // Su Android/Samsung: avvisa di disabilitare ottimizzazione batteria
+      const isAndroid = /android/i.test(navigator.userAgent);
+      if(isAndroid){
+        setTimeout(()=>{
+          showToast('⚡ Per ricevere SOS in background: disabilita ottimizzazione batteria per Chrome nelle Impostazioni!', 6000);
+        }, 1500);
+      }
+    } else {
+      showToast('⚠️ Permesso negato: SOS solo in foreground');
+    }
   });
 }
 function denySOSPerm(){
