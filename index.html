@@ -567,7 +567,7 @@ function enterGroup(){
   _requestWakeLock();
   brightIdx=1;applyBrightness();
   _startAutoGps();
-  setTimeout(()=>document.getElementById("sos-perm-overlay").classList.add("show"),1200);
+  setTimeout(checkSOSPermOnEnter,1200);
 }
 
 // ══════════════════════════════════
@@ -1814,12 +1814,26 @@ const _SOS_ICO='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(
 
 async function _fireNotif(name){
   if(!('Notification'in window)||Notification.permission!=='granted')return;
-  const o={body:(name||'Un amico')+' ha bisogno di aiuto!',requireInteraction:true,
-    vibrate:[700,150,700,150,700,300,1000,300,1000],tag:'sos-ring',renotify:true,
-    icon:_SOS_ICO,badge:_SOS_ICO};
-  if(_swReg){try{await _swReg.showNotification('🆘 EMERGENZA SOS!',o);return;}catch(e){}}
-  try{new Notification('🆘 EMERGENZA SOS!',{body:o.body,requireInteraction:true,
-    tag:'sos-ring',renotify:true,icon:_SOS_ICO});}catch(e){}
+  const o={
+    body:(name||'Un amico')+' ha bisogno di aiuto!',
+    requireInteraction:true,
+    vibrate:[700,150,700,150,700,300,1000,300,1000],
+    tag:'sos-ring',
+    renotify:true,
+    silent:false,
+    icon:_SOS_ICO,
+    badge:_SOS_ICO
+  };
+  let notified=false;
+  if(_swReg){
+    try{await _swReg.showNotification('🆘 EMERGENZA SOS!',o);notified=true;}catch(e){}
+  }
+  if(!notified){
+    try{new Notification('🆘 EMERGENZA SOS!',{
+      body:o.body,requireInteraction:true,
+      tag:'sos-ring',renotify:true,icon:_SOS_ICO
+    });}catch(e){}
+  }
 }
 function _startSOSRing(n){
   _fireNotif(n);
@@ -1832,8 +1846,33 @@ function _stopSOSRing(){
 }
 
 // ── Dialog ────────────────────────────────────────────────────────────
+function checkSOSPermOnEnter(){
+  const choice=localStorage.getItem('rfsos-choice');
+  if(choice==='yes'){
+    if(Notification.permission==='granted'){
+      _initSW();
+      // Sblocca AudioContext al primo gesto (richiesto dai browser moderni)
+      const _au=()=>{
+        _unlockAudio();
+        document.removeEventListener('touchstart',_au,true);
+        document.removeEventListener('click',_au,true);
+      };
+      document.addEventListener('touchstart',_au,{once:true,capture:true});
+      document.addEventListener('click',_au,{once:true,capture:true});
+    } else {
+      // Permesso revocato nel browser: ri-mostra il dialog
+      document.getElementById('sos-perm-overlay').classList.add('show');
+    }
+  } else if(choice==='no'){
+    // Utente ha scelto esplicitamente di non ricevere SOS — non disturbare
+  } else {
+    // Prima volta: mostra il dialog
+    document.getElementById('sos-perm-overlay').classList.add('show');
+  }
+}
 function acceptSOSPerm(){
   document.getElementById('sos-perm-overlay').classList.remove('show');
+  localStorage.setItem('rfsos-choice','yes');
   _unlockAudio();
   if(Notification.permission==='granted'){_initSW();}
   else if('Notification'in window){
@@ -1845,6 +1884,7 @@ function acceptSOSPerm(){
 }
 function denySOSPerm(){
   document.getElementById('sos-perm-overlay').classList.remove('show');
+  localStorage.setItem('rfsos-choice','no');
   showToast('SOS attivo solo con app aperta');
 }
 
@@ -1874,7 +1914,15 @@ async function _requestWakeLock(){
 
 // ── Riconnessione MQTT quando l'app torna in foreground ──────────────
 document.addEventListener('visibilitychange',()=>{
-  if(document.hidden)return;
+  if(document.hidden){
+    // App va in background/schermo spento: se SOS attivo spara subito notifica via SW
+    if(sosActiveId){
+      const fromName=document.getElementById('sos-from')?.textContent?.replace(/^Da:\s*/,'')
+        || 'Amico';
+      _fireNotif(fromName);
+    }
+    return;
+  }
   // Rientra in foreground: ripristina tutto
   if(mqttClient&&!mqttClient.connected)mqttClient.reconnect();
   if(_keepaliveAudio&&_keepaliveAudio.paused)_keepaliveAudio.play().catch(()=>{});
