@@ -259,6 +259,25 @@ body{transition:filter .3s;}
 #expired-overlay.show{display:flex;}
 .exp-title{font-size:22px;font-weight:900;color:#ff3333;}
 .exp-sub{font-size:13px;color:var(--dim);text-align:center;padding:0 30px;line-height:1.6;}
+
+/* ── MY GROUPS ── */
+.mg-title{font-size:11px;font-weight:800;letter-spacing:.8px;color:var(--dim);text-transform:uppercase;margin-bottom:8px;padding:0 2px;}
+.mgitem{background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 12px;margin-bottom:8px;border:1px solid rgba(255,255,255,0.08);}
+.mgitem:last-child{margin-bottom:0;}
+.mgitem-top{display:flex;align-items:center;gap:8px;margin-bottom:5px;}
+.mgitem-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.mgitem-name{font-size:14px;font-weight:700;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mgitem-code{font-size:10px;font-weight:800;letter-spacing:.8px;color:var(--cyan);background:rgba(0,192,255,0.12);border-radius:5px;padding:2px 7px;flex-shrink:0;}
+.mgitem-role{font-size:10px;padding:2px 7px;border-radius:4px;font-weight:700;flex-shrink:0;}
+.mgitem-creator{background:rgba(250,204,21,0.15);color:#facc15;}
+.mgitem-member{background:rgba(0,192,255,0.1);color:var(--cyan);}
+.mgitem-meta{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--dim);margin-bottom:8px;}
+.mgitem-actions{display:flex;gap:6px;}
+.mgitem-actions .btn{flex:1;padding:8px 0;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;border:none;font-family:inherit;}
+.btn-rejoin{background:linear-gradient(135deg,var(--green),#00a060);color:#000;}
+.btn-leave{background:rgba(255,107,107,0.12);color:#ff6b6b;border:1px solid rgba(255,107,107,0.3)!important;}
+.btn-del-grp{background:rgba(255,50,50,0.18);color:#ff4444;border:1px solid rgba(255,50,50,0.35)!important;font-weight:800;flex:0 0 44px!important;}
+.mg-empty{text-align:center;padding:18px 0 8px;color:var(--dim);font-size:13px;opacity:.7;}
 </style>
 </head>
 <body>
@@ -279,6 +298,11 @@ body{transition:filter .3s;}
     <button class="btn btn-b" onclick="startJoin()">Unisciti al gruppo</button>
   </div>
   <p class="hint">Nessun account · Dati eliminati all'uscita</p>
+  <!-- MY GROUPS -->
+  <div id="my-groups-card" style="margin-top:14px;" class="card">
+    <div class="mg-title">📋 I miei gruppi</div>
+    <div id="my-groups-list"></div>
+  </div>
 </div>
 
 <!-- NOME + COLORE -->
@@ -531,7 +555,7 @@ function handleNameConflict(){
 // NAV
 // ══════════════════════════════════
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
-function goLanding(){show('s-landing');groupId=null;}
+function goLanding(){show('s-landing');groupId=null;renderMyGroups();}
 function startCreate(){
   groupId=rndCode();
   groupName=document.getElementById('group-name-inp').value.trim()||('Gruppo '+groupId);
@@ -571,6 +595,7 @@ function enterGroup(){
   document.getElementById('gnm').textContent=groupName||('Gruppo '+groupId);
   setTimeout(fixCanvas,50);
   myJoinTs=Date.now();
+  saveGroupSession(_pendingCreator);
   brightIdx=1; applyBrightness();
   _startAutoGps();
   connectMQTT();startGps();
@@ -1125,6 +1150,7 @@ function publishGroupMeta(meta){
 function applyGroupMeta(data){
   groupMeta = data;
   _metaReceived = true;
+  updateGroupSessionExpiry(groupId, data.expiresAt);
   if(data.expiresAt <= Date.now()){
     triggerGroupExpiry(false); // già scaduto
     return;
@@ -1199,6 +1225,7 @@ function selfDestructClean(){
   // Pulisce localStorage per questo gruppo
   localStorage.removeItem('rfid_'+groupId);
   localStorage.removeItem('rfpins_'+groupId);
+  localStorage.removeItem('rfgrp_'+groupId);
   friends={}; predMap={}; smoothFriendPos={}; pins=[];
   myLat=null; myLon=null; groupMeta=null; _metaReceived=false;
 }
@@ -1216,6 +1243,7 @@ function hardReset(){
   groupId=null; groupMeta=null; _metaReceived=false; myName=''; myId=null;
   friends={}; predMap={}; smoothFriendPos={}; pins=[];
   show('s-landing');
+  renderMyGroups();
 }
 
 // ══════════════════════════════════════════
@@ -1825,6 +1853,7 @@ function showToast(m, dur=2800){const t=document.getElementById('toast');t.textC
 // ══════════════════════════════════
 window.addEventListener('DOMContentLoaded',()=>{
   clearOldGroups();
+  renderMyGroups();
   const c=new URLSearchParams(location.search).get('group');
   if(c){
     groupId=c.toUpperCase();
@@ -2083,6 +2112,170 @@ function selPinVis(v,btn){
   _pinVis=v;
   document.querySelectorAll('.pin-vis-btn').forEach(b=>b.classList.remove('sel'));
   btn.classList.add('sel');
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// MY GROUPS – sessioni salvate (rejoin, leave, delete)
+// ═══════════════════════════════════════════════════════════
+function saveGroupSession(forceCreator){
+  if(!groupId||!myId) return;
+  let existing=null;
+  try{ existing=JSON.parse(localStorage.getItem('rfgrp_'+groupId)); }catch(e){}
+  const isCreator=forceCreator===true?true:(existing?.isCreator||false);
+  localStorage.setItem('rfgrp_'+groupId, JSON.stringify({
+    groupId, groupName:groupName||groupId,
+    myId, myName, myColor,
+    joinTs:myJoinTs,
+    isCreator,
+    expiresAt:groupMeta?.expiresAt||existing?.expiresAt||0
+  }));
+}
+
+function updateGroupSessionExpiry(gid,expiresAt){
+  if(!gid||!expiresAt) return;
+  try{
+    const key='rfgrp_'+gid;
+    const d=JSON.parse(localStorage.getItem(key));
+    if(d){ d.expiresAt=expiresAt; d.groupName=groupName||d.groupName; localStorage.setItem(key,JSON.stringify(d)); }
+  }catch(e){}
+}
+
+function loadMyGroups(){
+  const now=Date.now();
+  return Object.keys(localStorage)
+    .filter(k=>k.startsWith('rfgrp_'))
+    .map(k=>{ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; }})
+    .filter(d=>d&&d.groupId&&(d.expiresAt===0||d.expiresAt>now))
+    .sort((a,b)=>(b.joinTs||0)-(a.joinTs||0));
+}
+
+function _fmtRemaining(ms){
+  if(ms<=0) return 'Scaduto';
+  const h=Math.floor(ms/3600000), m=Math.floor((ms%3600000)/60000);
+  return h>=1?`${h}h ${m}m rimanenti`:`${m}m rimanenti`;
+}
+
+function renderMyGroups(){
+  const card=document.getElementById('my-groups-card');
+  const list=document.getElementById('my-groups-list');
+  if(!card||!list) return;
+  const groups=loadMyGroups();
+  if(!groups.length){
+    list.innerHTML='<div class="mg-empty">Nessun gruppo attivo salvato</div>';
+    return;
+  }
+  const now=Date.now();
+  list.innerHTML=groups.map(g=>{
+    const rem=g.expiresAt>0?g.expiresAt-now:null;
+    const expTxt=rem!==null?_fmtRemaining(rem):'⏳ scadenza sconosciuta';
+    const roleHtml=g.isCreator
+      ?`<span class="mgitem-role mgitem-creator">👑 Creatore</span>`
+      :`<span class="mgitem-role mgitem-member">👤 Membro</span>`;
+    const deleteBtn=g.isCreator
+      ?`<button class="btn btn-del-grp" onclick="_deleteGroupFromLanding('${g.groupId}')" title="Elimina gruppo">🗑</button>`
+      :'';
+    return `<div class="mgitem" id="mgitem-${g.groupId}">
+  <div class="mgitem-top">
+    <div class="mgitem-dot" style="background:${g.myColor||'#00c0ff'}"></div>
+    <div class="mgitem-name">${g.groupName||g.groupId}</div>
+    <div class="mgitem-code">${g.groupId}</div>
+    ${roleHtml}
+  </div>
+  <div class="mgitem-meta">
+    <span>👤 ${g.myName||'—'}</span>
+    <span>⏱ ${expTxt}</span>
+  </div>
+  <div class="mgitem-actions">
+    <button class="btn btn-rejoin" onclick="_rejoinGroup('${g.groupId}')">↩ Riunisciti</button>
+    <button class="btn btn-leave" onclick="_leaveGroupFromLanding('${g.groupId}')">✕ Esci</button>
+    ${deleteBtn}
+  </div>
+</div>`;
+  }).join('');
+}
+
+function _rejoinGroup(gid){
+  let d;
+  try{ d=JSON.parse(localStorage.getItem('rfgrp_'+gid)); }catch(e){}
+  if(!d){ showToast('Dati gruppo non trovati'); return; }
+  groupId=d.groupId;
+  groupName=d.groupName||d.groupId;
+  myId=d.myId;
+  myName=d.myName;
+  myColor=d.myColor;
+  selColor=d.myColor;
+  myJoinTs=d.joinTs||Date.now();
+  _pendingCreator=false;
+  enterGroup();
+}
+
+function _leaveGroupFromLanding(gid){
+  if(!confirm('Vuoi uscire e cancellare la tua presenza dal gruppo?')) return;
+  let d;
+  try{ d=JSON.parse(localStorage.getItem('rfgrp_'+gid)); }catch(e){}
+  if(d&&d.myId){
+    const cl=mqtt.connect(BROKER,{clientId:'fclv'+d.myId.slice(-6)+'_'+Date.now().toString(36),clean:true,reconnectPeriod:0,connectTimeout:6000});
+    cl.on('connect',()=>{
+      const e=new Uint8Array(0);
+      cl.publish(`fc/${gid}/member/${d.myId}`,e,{retain:true,qos:1});
+      cl.publish(`fc/${gid}/pos/${d.myId}`,e,{retain:true,qos:1});
+      try{
+        const pins=JSON.parse(localStorage.getItem('rfpins_'+gid)||'[]');
+        pins.filter(p=>p.ownerId===d.myId&&p.visibility!=='private')
+          .forEach(p=>cl.publish(`fc/${gid}/pin/${p.id}`,e,{retain:true,qos:1}));
+      }catch(ex){}
+      setTimeout(()=>cl.end(),1500);
+    });
+    cl.on('error',()=>cl.end());
+  }
+  _cleanGroupLocal(gid);
+  showToast('Uscito dal gruppo');
+  _refreshMyGroupsUI(gid);
+}
+
+function _deleteGroupFromLanding(gid){
+  if(!confirm('Eliminare definitivamente il gruppo?\nTutti i membri perderanno l\'accesso.')) return;
+  let d;
+  try{ d=JSON.parse(localStorage.getItem('rfgrp_'+gid)); }catch(e){}
+  if(d&&d.myId){
+    const cl=mqtt.connect(BROKER,{clientId:'fcdel'+d.myId.slice(-6)+'_'+Date.now().toString(36),clean:true,reconnectPeriod:0,connectTimeout:6000});
+    cl.on('connect',()=>{
+      const e=new Uint8Array(0);
+      cl.publish(`fc/${gid}/meta`,JSON.stringify({expired:true,expiresAt:0}),
+        {retain:true,qos:1,properties:{messageExpiryInterval:3600}});
+      cl.publish(`fc/${gid}/member/${d.myId}`,e,{retain:true,qos:1});
+      cl.publish(`fc/${gid}/pos/${d.myId}`,e,{retain:true,qos:1});
+      try{
+        const pins=JSON.parse(localStorage.getItem('rfpins_'+gid)||'[]');
+        pins.filter(p=>p.ownerId===d.myId&&p.visibility!=='private')
+          .forEach(p=>cl.publish(`fc/${gid}/pin/${p.id}`,e,{retain:true,qos:1}));
+      }catch(ex){}
+      setTimeout(()=>{
+        cl.publish(`fc/${gid}/meta`,e,{retain:true,qos:1});
+        setTimeout(()=>cl.end(),400);
+      },600);
+    });
+    cl.on('error',()=>cl.end());
+  }
+  _cleanGroupLocal(gid);
+  showToast('Gruppo eliminato');
+  _refreshMyGroupsUI(gid);
+}
+
+function _cleanGroupLocal(gid){
+  localStorage.removeItem('rfgrp_'+gid);
+  localStorage.removeItem('rfid_'+gid);
+  localStorage.removeItem('rfpins_'+gid);
+}
+
+function _refreshMyGroupsUI(gid){
+  const item=document.getElementById('mgitem-'+gid);
+  if(item) item.remove();
+  const list=document.getElementById('my-groups-list');
+  if(list&&!list.children.length){
+    list.innerHTML='<div class="mg-empty">Nessun gruppo attivo salvato</div>';
+  }
 }
 
 </script>
