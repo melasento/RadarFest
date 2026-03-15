@@ -1835,12 +1835,35 @@ async function _fireNotif(name){
     });}catch(e){}
   }
 }
+// Codice Web Worker per il timer SOS (thread separato, meno throttling)
+const _SOS_WORKER_CODE=`
+  let iv=null;
+  self.onmessage=e=>{
+    if(e.data==='start'){if(iv)clearInterval(iv);iv=setInterval(()=>self.postMessage('tick'),4000);}
+    else if(e.data==='stop'){if(iv){clearInterval(iv);iv=null;}}
+  };
+`;
+let _sosWorker=null;
+
 function _startSOSRing(n){
+  // Burst iniziale: 2 notifiche ravvicinate prima che il throttling Samsung entri
   _fireNotif(n);
-  if(_sosNotifIv)clearInterval(_sosNotifIv);
-  _sosNotifIv=setInterval(()=>_fireNotif(n),4000);
+  setTimeout(()=>_fireNotif(n),1500);
+
+  // Web Worker per il timer (thread indipendente, sopravvive al throttling main thread)
+  try{
+    if(_sosWorker){_sosWorker.terminate();_sosWorker=null;}
+    _sosWorker=new Worker(URL.createObjectURL(new Blob([_SOS_WORKER_CODE],{type:'application/javascript'})));
+    _sosWorker.onmessage=()=>_fireNotif(n);
+    _sosWorker.postMessage('start');
+  }catch(e){
+    // Fallback: setInterval classico se Worker non disponibile
+    if(_sosNotifIv)clearInterval(_sosNotifIv);
+    _sosNotifIv=setInterval(()=>_fireNotif(n),4000);
+  }
 }
 function _stopSOSRing(){
+  if(_sosWorker){_sosWorker.postMessage('stop');_sosWorker.terminate();_sosWorker=null;}
   if(_sosNotifIv){clearInterval(_sosNotifIv);_sosNotifIv=null;}
   _swReg?.getNotifications({tag:'sos-ring'}).then(ns=>ns.forEach(n=>n.close())).catch(()=>{});
 }
@@ -1870,6 +1893,15 @@ function checkSOSPermOnEnter(){
     document.getElementById('sos-perm-overlay').classList.add('show');
   }
 }
+function _showSamsungBatteryGuide(){
+  // Mostra una volta sola la guida per batteria Samsung
+  if(localStorage.getItem('rfsos-samsung-guide'))return;
+  localStorage.setItem('rfsos-samsung-guide','1');
+  setTimeout(()=>{
+    showToast('📱 Samsung: Impostazioni → Batteria → Limite utilizzo in background → Chrome → Non limitata');
+  },2500);
+}
+
 function acceptSOSPerm(){
   document.getElementById('sos-perm-overlay').classList.remove('show');
   localStorage.setItem('rfsos-choice','yes');
@@ -1880,6 +1912,10 @@ function acceptSOSPerm(){
       if(p==='granted')_initSW();
       else showToast('Notifiche negate: SOS suona solo con app aperta');
     });
+  }
+  // Guida specifica per Samsung (One UI uccide Chrome in background)
+  if(/samsung|SM-[A-Z]|Galaxy/i.test(navigator.userAgent)){
+    _showSamsungBatteryGuide();
   }
 }
 function denySOSPerm(){
