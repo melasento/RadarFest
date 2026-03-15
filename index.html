@@ -1881,7 +1881,9 @@ self.addEventListener('fetch',e=>{
   // Cache-first SOLO per la pagina principale (scope), resto normale
   if(e.request.mode==='navigate'){
     e.respondWith(
-      fetch(e.request).catch(()=>caches.match(e.request))
+      fetch(e.request)
+        .catch(()=>caches.match(self.registration.scope)
+               .then(r=>r||caches.match(e.request)))
     );
   }
 });
@@ -1921,6 +1923,9 @@ async function _initSW(){
     start_url: location.href.split('?')[0],
     display: 'standalone',
     orientation: 'portrait',
+    scope: location.origin + location.pathname.replace(/\/[^\/]*$/, '/'),
+    handle_links: 'preferred',
+    launch_handler: { client_mode: 'navigate-existing' },
     background_color: '#050813',
     theme_color: '#050813',
     icons: [
