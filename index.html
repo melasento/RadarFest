@@ -591,7 +591,7 @@ function enterGroup(){
       } else if(perm === 'denied'){
         // Permesso già negato dall'utente: mostra overlay con istruzioni sblocco
         const sub = document.querySelector('#sos-perm-modal .spm-sub');
-        if(sub) sub.innerHTML = 'Il permesso notifiche è <b style="color:var(--red)">bloccato</b>.<br>Vai su <b>Impostazioni Chrome → Notifiche</b> e riattivalo per questo sito.<br><br>Il SOS funzionerà solo con l'app aperta.';
+        if(sub) sub.innerHTML = "Il permesso notifiche è <b style='color:var(--red)'>bloccato</b>.<br>Vai su <b>Impostazioni Chrome → Notifiche</b> e riattivalo per questo sito.<br><br>Il SOS funzionerà solo con l'app aperta.";
         document.getElementById('sos-perm-overlay').classList.add('show');
       } else {
         // 'default' o 'unsupported': mostra overlay normale
