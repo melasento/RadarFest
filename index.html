@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
 <meta name="screen-orientation" content="portrait">
 <title>Radar Fest</title>
+
+<!-- PWA: installabile su home screen (Android/iOS) -->
+<meta name="theme-color" content="#050813"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Radar Fest"/>
+<link id="pwa-manifest" rel="manifest"/>
 <script src="https://unpkg.com/mqtt@5/dist/mqtt.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -1804,13 +1812,26 @@ window.addEventListener('DOMContentLoaded',()=>{
 
 // --- Service Worker inline ---
 const _SW_SRC=`
-self.addEventListener('install',()=>self.skipWaiting());
+const CACHE='radarfest-v1';
+self.addEventListener('install',e=>{
+  self.skipWaiting();
+  // Metti in cache la pagina stessa per avvio offline
+  e.waitUntil(caches.open(CACHE).then(c=>c.add(self.registration.scope)).catch(()=>{}));
+});
 self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
+self.addEventListener('fetch',e=>{
+  // Cache-first SOLO per la pagina principale (scope), resto normale
+  if(e.request.mode==='navigate'){
+    e.respondWith(
+      fetch(e.request).catch(()=>caches.match(e.request))
+    );
+  }
+});
 self.addEventListener('notificationclick',e=>{
   e.notification.close();
   e.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(cs=>{
-    const w=cs.find(c=>c.url&&c.url.startsWith(self.location.origin));
-    return w?w.focus():self.clients.openWindow('/');
+    const w=cs.find(c=>c.url&&c.url.startsWith(self.registration.scope));
+    return w?w.focus():self.clients.openWindow(self.registration.scope);
   }));
 });
 self.addEventListener('message',e=>{if(e.data==='ping')e.source?.postMessage('pong');});
@@ -1824,6 +1845,70 @@ async function _initSW(){
     const blob=new Blob([_SW_SRC],{type:'application/javascript'});
     _swReg=await navigator.serviceWorker.register(URL.createObjectURL(blob));
   }catch(e){_swReg=null;}
+}
+
+// ══════════════════════════════════
+// PWA — MANIFEST INLINE + INSTALL PROMPT
+// ══════════════════════════════════
+(function _injectManifest(){
+  // Icona SVG radar 192×192 codificata inline (no file esterno)
+  const svg192 = `<svg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%23050813'/><circle cx='96' cy='96' r='70' stroke='%231a3a4a' stroke-width='2' fill='none'/><circle cx='96' cy='96' r='46' stroke='%231a3a4a' stroke-width='1.5' fill='none'/><circle cx='96' cy='96' r='23' stroke='%231a3a4a' stroke-width='1' fill='none'/><line x1='96' y1='26' x2='96' y2='96' stroke='%2300e87a' stroke-width='2'/><polygon points='96,22 90,34 102,34' fill='%2300e87a'/><circle cx='96' cy='96' r='6' fill='%2300e87a'/><circle cx='130' cy='68' r='7' fill='%2300c0ff'/><circle cx='72' cy='118' r='6' fill='%23ffa040'/></svg>`;
+  const svg512 = svg192.replace(/width='192'/g,"width='512'").replace(/height='192'/g,"height='512'").replace(/width='192'/g,"width='512'").replace(/height='192'/g,"height='512'").replace("viewBox='0 0 192 192'","viewBox='0 0 192 192'");
+  const toDataUrl = svg => 'data:image/svg+xml,' + svg;
+
+  const manifest = {
+    name: 'Radar Fest',
+    short_name: 'RadarFest',
+    description: 'Trova i tuoi amici in tempo reale',
+    start_url: location.href.split('?')[0],
+    display: 'standalone',
+    orientation: 'portrait',
+    background_color: '#050813',
+    theme_color: '#050813',
+    icons: [
+      { src: toDataUrl(svg192), sizes: '192x192', type: 'image/svg+xml', purpose: 'any maskable' },
+      { src: toDataUrl(svg192.replace(/192/g,'512')), sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' }
+    ]
+  };
+  const blob = new Blob([JSON.stringify(manifest)], {type:'application/manifest+json'});
+  const url  = URL.createObjectURL(blob);
+  document.getElementById('pwa-manifest').href = url;
+})();
+
+// Install prompt (Android Chrome mostra il banner "Aggiungi a home screen")
+let _deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _deferredInstallPrompt = e;
+  // Mostra pulsante di installazione nella topbar dopo 2s
+  setTimeout(_showInstallBtn, 2000);
+});
+window.addEventListener('appinstalled', () => {
+  _deferredInstallPrompt = null;
+  _hideInstallBtn();
+  showToast('✅ Radar Fest aggiunto alla home screen!');
+});
+
+function _showInstallBtn(){
+  let btn = document.getElementById('pwa-install-btn');
+  if(btn || !_deferredInstallPrompt) return;
+  btn = document.createElement('button');
+  btn.id = 'pwa-install-btn';
+  btn.className = 'tbtn';
+  btn.title = 'Aggiungi a home screen';
+  btn.style.cssText = 'font-size:17px;animation:sosPulse 2s infinite;background:rgba(0,200,100,0.15);color:var(--green)';
+  btn.textContent = '📲';
+  btn.onclick = async ()=>{
+    if(!_deferredInstallPrompt) return;
+    _deferredInstallPrompt.prompt();
+    const { outcome } = await _deferredInstallPrompt.userChoice;
+    if(outcome === 'accepted') _deferredInstallPrompt = null;
+    _hideInstallBtn();
+  };
+  document.querySelector('.tacts')?.prepend(btn);
+}
+function _hideInstallBtn(){
+  document.getElementById('pwa-install-btn')?.remove();
 }
 function _startSWKeepalive(){
   if(_swKaIv)clearInterval(_swKaIv);
