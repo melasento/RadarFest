@@ -1498,7 +1498,7 @@ function connectMQTT(){
             }
           }
           Object.assign(friends[uid2],{name:data.name,color:data.color,id:uid2,joinTs:data.joinTs||0});
-          if(data.groupName&&!groupName){groupName=data.groupName;document.getElementById('gnm').textContent=groupName;}
+          if(data.groupName&&!groupName){groupName=data.groupName;document.getElementById('gnm').textContent=groupName;saveGroupSession();}
           // Conflitto con il NOSTRO nome → dobbiamo cedere se siamo i nuovi
           if(data.name&&myName&&data.name.trim().toLowerCase()===myName.trim().toLowerCase()&&uid2!==myId){
             const theirTs=data.joinTs||0;
@@ -1618,7 +1618,6 @@ function startSOSAlert(senderName,senderId){
   sosFromId=senderId||null;
   sosActiveId=senderId||null;
   _startSOSRing(senderName); // suona in background/schermo spento
-  // SW loop: notifiche ogni 1.5s → vibrazione OS anche con schermo spento
   if(_swReg?.active) _swReg.active.postMessage({type:'sos-start',name:senderName});
   // Salva ultima posizione nota del mittente
   sosFromPos=null;
@@ -1640,11 +1639,9 @@ function startSOSAlert(senderName,senderId){
   // Vibrazione continua — clear preventivo doppio intervallo
   if(sosVibInterval){ clearInterval(sosVibInterval); sosVibInterval=null; }
   if(navigator.vibrate){
-    // Pattern lungo 90s: la vibrazione viene consegnata all'OS e può
-    // continuare anche dopo lo spegnimento dello schermo su molti device
     const SOS_LONG_VIB=Array.from({length:45},()=>[700,200]).flat();
     navigator.vibrate(SOS_LONG_VIB);
-    sosVibInterval=null; // non serve più setInterval, il pattern OS è già attivo
+    sosVibInterval=null;
   }
   // Audio — usa il contesto globale già sbloccato (funziona con schermo spento)
   try{
@@ -1901,10 +1898,7 @@ self.addEventListener('notificationclick',e=>{
     return w?w.focus():self.clients.openWindow(self.registration.scope);
   }));
 });
-// ── SOS vibrazione con schermo spento ──
 let _swSosActive=false,_swSosName='',_swSosCount=0;
-// Pattern vibratorio: 800ms on + 200ms off = 1s per ciclo
-// Inviato ogni 1500ms → device vibra quasi continuamente
 const SOS_VIB=[800,150,800,150,800,200];
 function _swLoopSOS(){
   return new Promise(resolve=>{
@@ -1912,7 +1906,6 @@ function _swLoopSOS(){
       if(!_swSosActive||_swSosCount>60){_swSosCount=0;resolve();return;}
       _swSosCount++;
       try{
-        // Tag univoco ogni ciclo: forza notifica NUOVA → vibra sempre
         await self.registration.showNotification('\u{1F198} EMERGENZA SOS!',{
           body:'\u{1F6A8} '+_swSosName+' ha bisogno di aiuto immediato!',
           requireInteraction:true,
@@ -2175,7 +2168,8 @@ function saveGroupSession(forceCreator){
   try{ existing=JSON.parse(localStorage.getItem('rfgrp_'+groupId)); }catch(e){}
   const isCreator=forceCreator===true?true:(existing?.isCreator||false);
   localStorage.setItem('rfgrp_'+groupId, JSON.stringify({
-    groupId, groupName:groupName||groupId, myId, myName, myColor,
+    groupId, groupName:groupName||existing?.groupName||groupId,
+    myId, myName, myColor,
     joinTs:myJoinTs, isCreator,
     expiresAt:groupMeta?.expiresAt||existing?.expiresAt||0
   }));
