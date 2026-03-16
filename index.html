@@ -1260,20 +1260,26 @@ function clearOldGroups(){
       const gid = k.replace('rfid_','');
       let identity;
       try{ identity = JSON.parse(localStorage.getItem(k)||'null'); }catch(ex){}
+      // Preserva pin e sessione se l'utente ha salvato il gruppo (potrà rientrare)
+      const _hasSession = !!localStorage.getItem('rfgrp_'+gid);
       if(identity && identity.id){
+        // Pulisci sempre presenza (member/pos) dal broker
         cl.publish(`fc/${gid}/member/${identity.id}`, e, {retain:true,qos:1});
         cl.publish(`fc/${gid}/pos/${identity.id}`,    e, {retain:true,qos:1});
+        // Pulisci pin dal broker SOLO se l'utente non tornerà nel gruppo
+        if(!_hasSession){
+          try{
+            const pinsData = JSON.parse(localStorage.getItem('rfpins_'+gid)||'[]');
+            pinsData.forEach(p=>{
+              if(p.ownerId===identity?.id)
+                cl.publish(`fc/${gid}/pin/${p.id}`, e, {retain:true,qos:1});
+            });
+          }catch(ex){}
+        }
       }
-      // Pulisci i pin di questo gruppo
-      try{
-        const pinsData = JSON.parse(localStorage.getItem('rfpins_'+gid)||'[]');
-        pinsData.forEach(p=>{
-          if(p.ownerId===identity?.id)
-            cl.publish(`fc/${gid}/pin/${p.id}`, e, {retain:true,qos:1});
-        });
-      }catch(ex){}
       localStorage.removeItem(k);
-      localStorage.removeItem('rfpins_'+gid);
+      // Preserva rfpins_ se l'utente ha una sessione salvata → ripubblicati al rejoin
+      if(!_hasSession) localStorage.removeItem('rfpins_'+gid);
     });
     setTimeout(()=>cl.end(), 2000);
   });
