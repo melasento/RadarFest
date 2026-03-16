@@ -1282,13 +1282,27 @@ function clearOldGroups(){
         cl.publish(`fc/${gid}/member/${identity.id}`, e, {retain:true,qos:1});
         cl.publish(`fc/${gid}/pos/${identity.id}`,    e, {retain:true,qos:1});
         if(!_hasSession){
+          // Cancella i pin dall'MQTT solo se non c'è una sessione attiva
+          // o se la sessione risulta già scaduta (no rfgrp_ = nessun dato di expiry).
+          // Protezione extra: leggi rfgrp_ se esiste (anche senza rfid_)
+          // per capire se il gruppo è ancora in vita.
+          const grpRaw = localStorage.getItem('rfgrp_'+gid);
+          let grpExpired = true;
           try{
-            const pinsData = JSON.parse(localStorage.getItem('rfpins_'+gid)||'[]');
-            pinsData.forEach(p=>{
-              if(p.ownerId===identity?.id)
-                cl.publish(`fc/${gid}/pin/${p.id}`, e, {retain:true,qos:1});
-            });
+            const grpData = JSON.parse(grpRaw||'null');
+            if(grpData && grpData.expiresAt && grpData.expiresAt > Date.now()){
+              grpExpired = false; // gruppo ancora attivo, NON cancellare i pin
+            }
           }catch(ex){}
+          if(grpExpired){
+            try{
+              const pinsData = JSON.parse(localStorage.getItem('rfpins_'+gid)||'[]');
+              pinsData.forEach(p=>{
+                if(p.ownerId===identity?.id)
+                  cl.publish(`fc/${gid}/pin/${p.id}`, e, {retain:true,qos:1});
+              });
+            }catch(ex){}
+          }
         }
       }
       localStorage.removeItem(k);
@@ -1485,8 +1499,17 @@ function connectMQTT(){
         return;
       }
       if(uid2===myId)return;
-      if(!raw.trim()){// Payload vuoto = utente rimosso dal broker
-        delete friends[uid2];delete predMap[uid2];delete smoothFriendPos[uid2];
+      if(!raw.trim()){
+        // Payload vuoto = retained cancellato dal broker
+        if(type==='pin'){
+          // Pin rimosso: aggiorna array locale
+          pins = pins.filter(x=>x.id!==uid2);
+          savePinsLocal();
+          if(document.getElementById('posizioni')?.style.display==='block') renderPosizioni();
+        } else {
+          // Utente uscito/rimosso
+          delete friends[uid2];delete predMap[uid2];delete smoothFriendPos[uid2];
+        }
         updateUI();return;
       }
       const data=JSON.parse(raw);
@@ -1545,12 +1568,28 @@ function connectMQTT(){
         }
       }else if(type==='pin'){
           if(!pins.find(x=>x.id===data.id)){
+            // ── Pin ownership reclaim ──────────────────────────
+            // Se il pin ha lo stesso ownerName ma un ownerId diverso
+            // (es. dopo un rejoin che ha generato un nuovo myId),
+            // riconosciamo il pin come nostro e lo ri-pubblichiamo
+            // con il myId attuale così il pulsante ✕ riappare.
+            if(data.ownerName && myName &&
+               data.ownerName.trim().toLowerCase() === myName.trim().toLowerCase() &&
+               data.ownerId !== myId){
+              data.ownerId   = myId;
+              data.ownerName = myName;
+              // Ri-pubblica con ownership corretta (sovrascrive il retained sul broker)
+              setTimeout(()=>publishPin(data), 500);
+            }
             pins.push(data); savePinsLocal();
             if(data.ownerId!==myId) showToast('📍 '+data.ownerName+': '+data.name);
+            // Aggiorna la tab Posizioni se è aperta
+            if(document.getElementById('posizioni')?.style.display==='block') renderPosizioni();
           }
         }else if(type==='pin_del'){
           pins = pins.filter(x=>x.id!==data.pinId);
           savePinsLocal(); renderLista();
+          if(document.getElementById('posizioni')?.style.display==='block') renderPosizioni();
         }
       updateUI();
     }catch(e){}
