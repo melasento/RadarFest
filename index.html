@@ -1370,6 +1370,8 @@ function startGps(){
         if(d<2){
           if(!stTimer)stTimer=setTimeout(()=>{
             navigator.geolocation.clearWatch(gpsWatch);
+            gpsWatch=null;
+            stTimer=null;
             dot.className='gdot old';lbl.textContent='GPS fermo';
           },60000);
           // Se già fermo e gpsMoving, passa a modalità risparmio
@@ -1429,7 +1431,7 @@ async function requestCompassPermission(){
   }
 }
 
-setInterval(()=>{
+let _gpsStaleIv=setInterval(()=>{
   if(!gpsTs||!myLat)return;
   if((Date.now()-gpsTs)>30000){document.getElementById('gdot').className='gdot old';document.getElementById('glbl').textContent='GPS vecchio ±'+(myAcc||'?')+'m';}
 },5000);
@@ -1517,8 +1519,8 @@ function connectMQTT(){
       }else if(type==='soscancel'){
         if(sosActiveId===uid2){ stopSOSAlert(); showToast('✅ SOS annullato da '+(data.name||'mittente')); }
       }else if(type==='sosack'){
-        // Ferma l'alert SOS su TUTTI i dispositivi del gruppo
-        if(sosActiveId){
+        // Ferma l'alert SOS solo se riguarda il mittente che stai ricevendo
+        if(sosActiveId && sosActiveId===uid2){
           stopSOSAlert();
           showToast('✅ '+data.name+' ha risposto al SOS');
         }
@@ -1527,13 +1529,16 @@ function connectMQTT(){
           addNotification('✅ '+data.name+' ha confermato il tuo SOS',new Date());
         }
       }else if(type==='pin'){
-          if(!pins.find(x=>x.id===data.id)){
+          const _pidx=pins.findIndex(x=>x.id===data.id);
+          if(_pidx===-1){
             pins.push(data); savePinsLocal();
             if(data.ownerId!==myId) showToast('📍 '+data.ownerName+': '+data.name);
+          } else if(data.ownerId!==myId){
+            pins[_pidx]=data; savePinsLocal(); renderPosizioni(); renderLista();
           }
         }else if(type==='pin_del'){
           pins = pins.filter(x=>x.id!==data.pinId);
-          savePinsLocal(); renderLista();
+          savePinsLocal(); renderPosizioni(); renderLista();
         }
       updateUI();
     }catch(e){}
@@ -1562,7 +1567,7 @@ function publishPos(){
     if(moved<5)return;
   }
   lastPubLat=myLat;lastPubLon=myLon;
-  mqttClient.publish(`fc/${groupId}/pos/${myId}`,JSON.stringify({lat:myLat,lon:myLon,ts:Date.now(),acc:myAcc}),{retain:true,qos:0,properties:{messageExpiryInterval:86400}});
+  mqttClient.publish(`fc/${groupId}/pos/${myId}`,JSON.stringify({lat:myLat,lon:myLon,ts:Date.now(),acc:myAcc}),{retain:true,qos:1,properties:{messageExpiryInterval:86400}});
 }
 function removeMQTT(){
   if(!mqttClient)return;
