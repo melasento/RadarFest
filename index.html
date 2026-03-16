@@ -940,6 +940,7 @@ const PIN_SHAPES = [
 let pins = [];           // {id,name,shape,color,lat,lon,ownerId,ownerName}
 let _pinSelShape = PIN_SHAPES[0].id;
 let _pinSelColor = '#ffa040';
+let _pinVis = 'public';
 
 function loadPins(){
   try{ pins = JSON.parse(localStorage.getItem('rfpins_'+groupId)||'[]'); }catch(e){ pins=[]; }
@@ -1228,6 +1229,15 @@ function selfDestructClean(){
   localStorage.removeItem('rfgrp_'+groupId);
   friends={}; predMap={}; smoothFriendPos={}; pins=[];
   myLat=null; myLon=null; groupMeta=null; _metaReceived=false;
+  // Reset stati aggiuntivi
+  if(gpsWatch){navigator.geolocation.clearWatch(gpsWatch);gpsWatch=null;}
+  if(stTimer){clearTimeout(stTimer);stTimer=null;}
+  lastPubLat=null; lastPubLon=null;
+  warnDismissed=false;
+  selectedFriendId=null;
+  notifications=[];
+  sosCountdown=SOS_DURATION;
+  Object.keys(sepNotified).forEach(k=>delete sepNotified[k]);
 }
 
 // Cancellami dal gruppo (esce e rimuove dati propri, gruppo continua)
@@ -1242,6 +1252,13 @@ function hardReset(){
   document.getElementById('expired-overlay').classList.remove('show');
   groupId=null; groupMeta=null; _metaReceived=false; myName=''; myId=null;
   friends={}; predMap={}; smoothFriendPos={}; pins=[];
+  // Reset stati aggiuntivi
+  lastPubLat=null; lastPubLon=null;
+  warnDismissed=false;
+  selectedFriendId=null;
+  notifications=[];
+  sosCountdown=SOS_DURATION;
+  Object.keys(sepNotified).forEach(k=>delete sepNotified[k]);
   show('s-landing');
   renderMyGroups();
 }
@@ -1370,8 +1387,6 @@ function startGps(){
         if(d<2){
           if(!stTimer)stTimer=setTimeout(()=>{
             navigator.geolocation.clearWatch(gpsWatch);
-            gpsWatch=null;
-            stTimer=null;
             dot.className='gdot old';lbl.textContent='GPS fermo';
           },60000);
           // Se già fermo e gpsMoving, passa a modalità risparmio
@@ -1431,7 +1446,7 @@ async function requestCompassPermission(){
   }
 }
 
-let _gpsStaleIv=setInterval(()=>{
+setInterval(()=>{
   if(!gpsTs||!myLat)return;
   if((Date.now()-gpsTs)>30000){document.getElementById('gdot').className='gdot old';document.getElementById('glbl').textContent='GPS vecchio ±'+(myAcc||'?')+'m';}
 },5000);
@@ -1519,8 +1534,8 @@ function connectMQTT(){
       }else if(type==='soscancel'){
         if(sosActiveId===uid2){ stopSOSAlert(); showToast('✅ SOS annullato da '+(data.name||'mittente')); }
       }else if(type==='sosack'){
-        // Ferma l'alert SOS solo se riguarda il mittente che stai ricevendo
-        if(sosActiveId && sosActiveId===uid2){
+        // Ferma l'alert SOS su TUTTI i dispositivi del gruppo
+        if(sosActiveId){
           stopSOSAlert();
           showToast('✅ '+data.name+' ha risposto al SOS');
         }
@@ -1529,16 +1544,13 @@ function connectMQTT(){
           addNotification('✅ '+data.name+' ha confermato il tuo SOS',new Date());
         }
       }else if(type==='pin'){
-          const _pidx=pins.findIndex(x=>x.id===data.id);
-          if(_pidx===-1){
+          if(!pins.find(x=>x.id===data.id)){
             pins.push(data); savePinsLocal();
             if(data.ownerId!==myId) showToast('📍 '+data.ownerName+': '+data.name);
-          } else if(data.ownerId!==myId){
-            pins[_pidx]=data; savePinsLocal(); renderPosizioni(); renderLista();
           }
         }else if(type==='pin_del'){
           pins = pins.filter(x=>x.id!==data.pinId);
-          savePinsLocal(); renderPosizioni(); renderLista();
+          savePinsLocal(); renderLista();
         }
       updateUI();
     }catch(e){}
@@ -1567,7 +1579,7 @@ function publishPos(){
     if(moved<5)return;
   }
   lastPubLat=myLat;lastPubLon=myLon;
-  mqttClient.publish(`fc/${groupId}/pos/${myId}`,JSON.stringify({lat:myLat,lon:myLon,ts:Date.now(),acc:myAcc}),{retain:true,qos:1,properties:{messageExpiryInterval:86400}});
+  mqttClient.publish(`fc/${groupId}/pos/${myId}`,JSON.stringify({lat:myLat,lon:myLon,ts:Date.now(),acc:myAcc}),{retain:true,qos:0,properties:{messageExpiryInterval:86400}});
 }
 function removeMQTT(){
   if(!mqttClient)return;
@@ -1694,6 +1706,7 @@ function stopSOSAlert(){
     );
   }
   sosFromId=null;sosFromPos=null;sosActiveId=null;
+  sosCountdown=SOS_DURATION; // reset per prossimo SOS
 }
 function autoStopSOS(senderName){
   // Costruisci stringa posizione prima di resettare sosFromPos
@@ -1850,7 +1863,7 @@ function shareWA(){
 }
 function copyLink(){const url=getUrl();if(!url){showToast('⚠️ Serve HTTPS');return;}navigator.clipboard?.writeText(url);showToast('🔗 Link copiato!');}
 function copyCode(){navigator.clipboard?.writeText(groupId);showToast('📋 Codice: '+groupId);}
-function leaveGroup(){if(!confirm('Uscire?'))return;if(gpsWatch)navigator.geolocation.clearWatch(gpsWatch);removeMQTT();friends={};predMap={};smoothFriendPos={};show('s-landing');groupId=null;try{screen.orientation.unlock();}catch(e){}}
+// (leaveGroup definita sopra nella sezione "GRUPPO LIFETIME")
 
 // ══════════════════════════════════
 // TOAST
@@ -2152,16 +2165,6 @@ function _startAutoGps(){
 // CLEANUP ALL'USCITA
 // ═══════════════════════════════════════════════════════
 const _origSelfDestruct=window.selfDestructClean||null;
-
-// ═══════════════════════════════════════════════════════
-// PIN VISIBILITÀ
-// ═══════════════════════════════════════════════════════
-let _pinVis='public';
-function selPinVis(v,btn){
-  _pinVis=v;
-  document.querySelectorAll('.pin-vis-btn').forEach(b=>b.classList.remove('sel'));
-  btn.classList.add('sel');
-}
 
 
 // ═══════════════════════════════════════════════════════════
