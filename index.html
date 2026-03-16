@@ -559,6 +559,7 @@ function goLanding(){show('s-landing');groupId=null;renderMyGroups();}
 function startCreate(){
   groupId=rndCode();
   groupName=document.getElementById('group-name-inp').value.trim()||('Gruppo '+groupId);
+  _pendingCreator=true;  // questo client sta CREANDO il gruppo
   if(loadIdentity()){ enterGroup(); return; }
   buildPicker();show('s-name');
   setTimeout(()=>document.getElementById('name-inp').focus(),80);
@@ -568,6 +569,7 @@ function startJoin(){
   const c=document.getElementById('code-inp').value.trim().toUpperCase();
   if(c.length<4){showToast('⚠️ Codice non valido');return;}
   groupId=c;groupName='';
+  _pendingCreator=false;  // questo client sta ENTRANDO nel gruppo, NON creandolo
   if(loadIdentity()){ enterGroup(); return; }
   buildPicker();show('s-name');
   setTimeout(()=>document.getElementById('name-inp').focus(),80);
@@ -586,7 +588,7 @@ function confirmName(){
   document.getElementById('name-hint').style.display='none';
   myName=n;myColor=selColor;myId=uid();
   saveIdentity();
-  _pendingCreator=true;
+  // _pendingCreator è già impostato da startCreate()/startJoin() — non va cambiato qui
   enterGroup();
 }
 function enterGroup(){
@@ -2308,6 +2310,8 @@ function _leaveGroupFromLanding(gid){
 function _deleteGroupFromLanding(gid){
   if(!confirm('Eliminare definitivamente il gruppo?\nTutti i membri perderanno l\'accesso.')) return;
   let d; try{ d=JSON.parse(localStorage.getItem('rfgrp_'+gid)); }catch(e){}
+  // Protezione: solo il creatore può eliminare il gruppo
+  if(!d||!d.isCreator){ showToast('⚠️ Solo il creatore può eliminare il gruppo'); return; }
   if(d&&d.myId){
     const cl=mqtt.connect(BROKER,{clientId:'fcdel'+d.myId.slice(-6)+'_'+Date.now().toString(36),clean:true,reconnectPeriod:0,connectTimeout:6000});
     cl.on('connect',()=>{
