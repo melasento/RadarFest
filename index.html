@@ -555,14 +555,7 @@ function handleNameConflict(){
 // NAV
 // ══════════════════════════════════
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
-function goLanding(){
-  ['expired-overlay','sos-perm-overlay','pin-overlay','gps-acquire'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el){el.classList.remove('show');el.style.display='';}
-  });
-  document.getElementById('sos-banner').style.display='none';
-  show('s-landing');groupId=null;renderMyGroups();
-}
+function goLanding(){show('s-landing');groupId=null;renderMyGroups();}
 function startCreate(){
   groupId=rndCode();
   groupName=document.getElementById('group-name-inp').value.trim()||('Gruppo '+groupId);
@@ -617,7 +610,6 @@ function enterGroup(){
   }
   // Chiedi permesso SOS ad OGNI entrata nel gruppo
   setTimeout(()=>{
-    if(!groupId) return; // utente già uscito dal gruppo
     try {
       const perm = ('Notification' in window) ? Notification.permission : 'unsupported';
       if(perm === 'granted'){
@@ -1247,12 +1239,7 @@ function leaveGroup(){
 
 // Reset completo → landing
 function hardReset(){
-  // Rimuovi TUTTI gli overlay che potrebbero bloccare la landing
-  ['expired-overlay','sos-perm-overlay','pin-overlay','gps-acquire'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el){el.classList.remove('show');el.style.display='';}
-  });
-  document.getElementById('sos-banner').style.display='none';
+  document.getElementById('expired-overlay').classList.remove('show');
   groupId=null; groupMeta=null; _metaReceived=false; myName=''; myId=null;
   friends={}; predMap={}; smoothFriendPos={}; pins=[];
   show('s-landing');
@@ -1555,26 +1542,13 @@ function connectMQTT(){
 }
 // Riconnessione MQTT quando la pagina torna in foreground (fix Android background kill)
 document.addEventListener('visibilitychange', ()=>{
-  if(document.visibilityState === 'hidden'){
-    // App in background / schermo spento:
-    // se il SOS è attivo, ri-invia sos-start al SW per assicurare vibrazione OS-level
-    if(sosActiveId){
-      const _swTarget2 = navigator.serviceWorker?.controller || _swReg?.active;
-      const _sosName = (friends[sosActiveId]?.name)||document.getElementById('sos-from')?.textContent?.replace('Da: ','')||'Un amico';
-      if(_swTarget2) _swTarget2.postMessage({type:'sos-start', name:_sosName});
-    }
-  } else if(document.visibilityState === 'visible' && groupId){
+  if(document.visibilityState === 'visible' && groupId){
     if(!mqttClient || !mqttClient.connected){
       showToast('🔄 Riconnessione…');
       connectMQTT();
     }
-    // Ripristina AudioContext se sospeso
+    // Tenta di riprendere l'AudioContext se sospeso
     if(_bgAudioCtx && _bgAudioCtx.state === 'suspended') _bgAudioCtx.resume().catch(()=>{});
-    // App torna in foreground: se il SOS è ancora attivo, riavvia vibrazione main-thread
-    if(sosActiveId && navigator.vibrate){
-      const SOS_FG_VIB = Array.from({length:30}, ()=>[700,200]).flat();
-      navigator.vibrate(SOS_FG_VIB);
-    }
   }
 });
 
@@ -1644,9 +1618,7 @@ function startSOSAlert(senderName,senderId){
   sosFromId=senderId||null;
   sosActiveId=senderId||null;
   _startSOSRing(senderName); // suona in background/schermo spento
-  // Invia sos-start al SW: controller è più affidabile di _swReg.active
-  const _swTarget = navigator.serviceWorker?.controller || _swReg?.active;
-  if(_swTarget) _swTarget.postMessage({type:'sos-start',name:senderName});
+  if(_swReg?.active) _swReg.active.postMessage({type:'sos-start',name:senderName});
   // Salva ultima posizione nota del mittente
   sosFromPos=null;
   if(senderId&&friends[senderId]&&friends[senderId].lat!==null){
@@ -1927,12 +1899,11 @@ self.addEventListener('notificationclick',e=>{
   }));
 });
 let _swSosActive=false,_swSosName='',_swSosCount=0;
-// SOS Morse: · · · — — — · · · (inudibile: vibra e basta)
-const SOS_VIB=[200,100,200,100,200,300,600,100,600,100,600,300,200,100,200,100,200,1500];
+const SOS_VIB=[800,150,800,150,800,200];
 function _swLoopSOS(){
   return new Promise(resolve=>{
     const fire=async()=>{
-      if(!_swSosActive||_swSosCount>55){_swSosCount=0;resolve();return;}
+      if(!_swSosActive||_swSosCount>60){_swSosCount=0;resolve();return;}
       _swSosCount++;
       try{
         await self.registration.showNotification('\u{1F198} EMERGENZA SOS!',{
@@ -1945,7 +1916,7 @@ function _swLoopSOS(){
           data:{url:self.registration.scope}
         });
       }catch(ex){}
-      setTimeout(fire,1400);
+      setTimeout(fire,1500);
     };
     fire();
   });
@@ -2086,7 +2057,7 @@ function _unlockAudio(silent=false){
 }
 
 // --- Backend SOS: SW + audio + keepalive ---
-async async function _initSOSBackend(){
+async function _initSOSBackend(){
   _unlockAudio();
   await _initSW();
   _startSWKeepalive();
@@ -2127,7 +2098,7 @@ const _SOS_ICON='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(
   '</svg>');
 
 // --- Notifica sistema SOS ---
-async async function _fireSOSNotif(name){
+async function _fireSOSNotif(name){
   if(!('Notification' in window)||Notification.permission!=='granted')return;
   const opts={
     body:(name||'Un amico')+' ha bisogno di aiuto immediato!',
@@ -2147,7 +2118,7 @@ async async function _fireSOSNotif(name){
 function _startSOSRing(name){
   _fireSOSNotif(name);
   if(_sosNotifIv)clearInterval(_sosNotifIv);
-  _sosNotifIv=setInterval(()=>_fireSOSNotif(name),2000); // 2s: vibrazione quasi continua
+  _sosNotifIv=setInterval(()=>_fireSOSNotif(name),4000);
 }
 function _stopSOSRing(){
   if(_sosNotifIv){clearInterval(_sosNotifIv);_sosNotifIv=null;}
