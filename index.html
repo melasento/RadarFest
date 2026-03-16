@@ -1456,6 +1456,7 @@ function connectMQTT(){
   mqttClient.on('message',(topic,payload)=>{
     try{
       const pts=topic.split('/'),type=pts[2],uid2=pts[3];
+      const raw=payload.toString();
       // Topic meta: scadenza gruppo
       if(type==='meta'){
         if(!raw.trim()) return; // retained pulito
@@ -1467,7 +1468,6 @@ function connectMQTT(){
         return;
       }
       if(uid2===myId)return;
-      const raw=payload.toString();
       if(!raw.trim()){// Payload vuoto = utente rimosso dal broker
         delete friends[uid2];delete predMap[uid2];delete smoothFriendPos[uid2];
         updateUI();return;
@@ -1952,7 +1952,7 @@ async function _initSW(){
 (function _injectManifest(){
   // Icona SVG radar 192×192 codificata inline (no file esterno)
   const svg192 = `<svg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%23050813'/><circle cx='96' cy='96' r='70' stroke='%231a3a4a' stroke-width='2' fill='none'/><circle cx='96' cy='96' r='46' stroke='%231a3a4a' stroke-width='1.5' fill='none'/><circle cx='96' cy='96' r='23' stroke='%231a3a4a' stroke-width='1' fill='none'/><line x1='96' y1='26' x2='96' y2='96' stroke='%2300e87a' stroke-width='2'/><polygon points='96,22 90,34 102,34' fill='%2300e87a'/><circle cx='96' cy='96' r='6' fill='%2300e87a'/><circle cx='130' cy='68' r='7' fill='%2300c0ff'/><circle cx='72' cy='118' r='6' fill='%23ffa040'/></svg>`;
-  const svg512 = svg192.replace(/width='192'/g,"width='512'").replace(/height='192'/g,"height='512'").replace(/width='192'/g,"width='512'").replace(/height='192'/g,"height='512'").replace("viewBox='0 0 192 192'","viewBox='0 0 192 192'");
+  const svg512 = svg192.replace(/width='192'/g,"width='512'").replace(/height='192'/g,"height='512'").replace("viewBox='0 0 192 192'","viewBox='0 0 512 512'");
   const toDataUrl = svg => 'data:image/svg+xml,' + svg;
 
   const manifest = {
