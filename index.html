@@ -1618,6 +1618,7 @@ function startSOSAlert(senderName,senderId){
   sosFromId=senderId||null;
   sosActiveId=senderId||null;
   _startSOSRing(senderName); // suona in background/schermo spento
+  // SW loop: notifiche ogni 1.5s → vibrazione OS anche con schermo spento
   if(_swReg?.active) _swReg.active.postMessage({type:'sos-start',name:senderName});
   // Salva ultima posizione nota del mittente
   sosFromPos=null;
@@ -1639,8 +1640,11 @@ function startSOSAlert(senderName,senderId){
   // Vibrazione continua — clear preventivo doppio intervallo
   if(sosVibInterval){ clearInterval(sosVibInterval); sosVibInterval=null; }
   if(navigator.vibrate){
-    navigator.vibrate([600,200,600,200,600]);
-    sosVibInterval=setInterval(()=>navigator.vibrate([600,200,600,200,600]),2500);
+    // Pattern lungo 90s: la vibrazione viene consegnata all'OS e può
+    // continuare anche dopo lo spegnimento dello schermo su molti device
+    const SOS_LONG_VIB=Array.from({length:45},()=>[700,200]).flat();
+    navigator.vibrate(SOS_LONG_VIB);
+    sosVibInterval=null; // non serve più setInterval, il pattern OS è già attivo
   }
   // Audio — usa il contesto globale già sbloccato (funziona con schermo spento)
   try{
@@ -1877,12 +1881,10 @@ const _SW_SRC=`
 const CACHE='radarfest-v1';
 self.addEventListener('install',e=>{
   self.skipWaiting();
-  // Metti in cache la pagina stessa per avvio offline
   e.waitUntil(caches.open(CACHE).then(c=>c.add(self.registration.scope)).catch(()=>{}));
 });
 self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch',e=>{
-  // Cache-first SOLO per la pagina principale (scope), resto normale
   if(e.request.mode==='navigate'){
     e.respondWith(
       fetch(e.request)
@@ -1893,28 +1895,35 @@ self.addEventListener('fetch',e=>{
 });
 self.addEventListener('notificationclick',e=>{
   e.notification.close();
+  _swSosActive=false;
   e.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(cs=>{
     const w=cs.find(c=>c.url&&c.url.startsWith(self.registration.scope));
     return w?w.focus():self.clients.openWindow(self.registration.scope);
   }));
 });
-let _swSosActive=false,_swSosName='';
+// ── SOS vibrazione con schermo spento ──
+let _swSosActive=false,_swSosName='',_swSosCount=0;
+// Pattern vibratorio: 800ms on + 200ms off = 1s per ciclo
+// Inviato ogni 1500ms → device vibra quasi continuamente
+const SOS_VIB=[800,150,800,150,800,200];
 function _swLoopSOS(){
   return new Promise(resolve=>{
-    let count=0;
     const fire=async()=>{
-      if(!_swSosActive||count>20){resolve();return;}
-      count++;
+      if(!_swSosActive||_swSosCount>60){_swSosCount=0;resolve();return;}
+      _swSosCount++;
       try{
+        // Tag univoco ogni ciclo: forza notifica NUOVA → vibra sempre
         await self.registration.showNotification('\u{1F198} EMERGENZA SOS!',{
-          body:_swSosName+' ha bisogno di aiuto immediato!',
+          body:'\u{1F6A8} '+_swSosName+' ha bisogno di aiuto immediato!',
           requireInteraction:true,
-          vibrate:[700,150,700,150,700,150,700,150,700,300],
-          tag:'sos-ring',renotify:true,
+          vibrate:SOS_VIB,
+          tag:'sos-'+(_swSosCount%3),
+          renotify:true,
+          silent:false,
           data:{url:self.registration.scope}
         });
       }catch(ex){}
-      setTimeout(fire,4000);
+      setTimeout(fire,1500);
     };
     fire();
   });
@@ -1922,12 +1931,14 @@ function _swLoopSOS(){
 self.addEventListener('message',e=>{
   if(e.data==='ping'){e.source?.postMessage('pong');return;}
   if(e.data?.type==='sos-start'){
-    _swSosActive=true; _swSosName=e.data.name||'Un amico';
+    _swSosActive=true; _swSosName=e.data.name||'Un amico'; _swSosCount=0;
     e.waitUntil(_swLoopSOS());
   }
   if(e.data?.type==='sos-stop'){
-    _swSosActive=false;
-    self.registration.getNotifications({tag:'sos-ring'}).then(ns=>ns.forEach(n=>n.close())).catch(()=>{});
+    _swSosActive=false; _swSosCount=0;
+    self.registration.getNotifications()
+      .then(ns=>ns.filter(n=>n.tag.startsWith('sos-')).forEach(n=>n.close()))
+      .catch(()=>{});
   }
 });
 `;
