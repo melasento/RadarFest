@@ -1260,13 +1260,10 @@ function clearOldGroups(){
       const gid = k.replace('rfid_','');
       let identity;
       try{ identity = JSON.parse(localStorage.getItem(k)||'null'); }catch(ex){}
-      // Preserva pin e sessione se l'utente ha salvato il gruppo (potrà rientrare)
       const _hasSession = !!localStorage.getItem('rfgrp_'+gid);
       if(identity && identity.id){
-        // Pulisci sempre presenza (member/pos) dal broker
         cl.publish(`fc/${gid}/member/${identity.id}`, e, {retain:true,qos:1});
         cl.publish(`fc/${gid}/pos/${identity.id}`,    e, {retain:true,qos:1});
-        // Pulisci pin dal broker SOLO se l'utente non tornerà nel gruppo
         if(!_hasSession){
           try{
             const pinsData = JSON.parse(localStorage.getItem('rfpins_'+gid)||'[]');
@@ -1278,7 +1275,6 @@ function clearOldGroups(){
         }
       }
       localStorage.removeItem(k);
-      // Preserva rfpins_ se l'utente ha una sessione salvata → ripubblicati al rejoin
       if(!_hasSession) localStorage.removeItem('rfpins_'+gid);
     });
     setTimeout(()=>cl.end(), 2000);
@@ -1622,6 +1618,7 @@ function startSOSAlert(senderName,senderId){
   sosFromId=senderId||null;
   sosActiveId=senderId||null;
   _startSOSRing(senderName); // suona in background/schermo spento
+  if(_swReg?.active) _swReg.active.postMessage({type:'sos-start',name:senderName});
   // Salva ultima posizione nota del mittente
   sosFromPos=null;
   if(senderId&&friends[senderId]&&friends[senderId].lat!==null){
@@ -1672,6 +1669,7 @@ function updateSOSCountdown(){
 function stopSOSAlert(){
   document.getElementById('sos-banner').style.display='none';
   _stopSOSRing(); // ferma notifiche sistema
+  if(_swReg?.active) _swReg.active.postMessage({type:'sos-stop'});
   const _vi=sosVibInterval; sosVibInterval=null;
   clearInterval(_vi); clearInterval(sosCdInterval);
   if(navigator.vibrate){ navigator.vibrate([]); navigator.vibrate(0); }
@@ -1900,7 +1898,38 @@ self.addEventListener('notificationclick',e=>{
     return w?w.focus():self.clients.openWindow(self.registration.scope);
   }));
 });
-self.addEventListener('message',e=>{if(e.data==='ping')e.source?.postMessage('pong');});
+let _swSosActive=false,_swSosName='';
+function _swLoopSOS(){
+  return new Promise(resolve=>{
+    let count=0;
+    const fire=async()=>{
+      if(!_swSosActive||count>20){resolve();return;}
+      count++;
+      try{
+        await self.registration.showNotification('\u{1F198} EMERGENZA SOS!',{
+          body:_swSosName+' ha bisogno di aiuto immediato!',
+          requireInteraction:true,
+          vibrate:[700,150,700,150,700,150,700,150,700,300],
+          tag:'sos-ring',renotify:true,
+          data:{url:self.registration.scope}
+        });
+      }catch(ex){}
+      setTimeout(fire,4000);
+    };
+    fire();
+  });
+}
+self.addEventListener('message',e=>{
+  if(e.data==='ping'){e.source?.postMessage('pong');return;}
+  if(e.data?.type==='sos-start'){
+    _swSosActive=true; _swSosName=e.data.name||'Un amico';
+    e.waitUntil(_swLoopSOS());
+  }
+  if(e.data?.type==='sos-stop'){
+    _swSosActive=false;
+    self.registration.getNotifications({tag:'sos-ring'}).then(ns=>ns.forEach(n=>n.close())).catch(()=>{});
+  }
+});
 `;
 
 async function _initSW(){
@@ -2078,7 +2107,7 @@ async function _fireSOSNotif(name){
   if(_swReg){
     try{await _swReg.showNotification('🆘 EMERGENZA SOS!',opts);return;}catch(e){}
   }
-  try{new Notification('🆘 EMERGENZA SOS!',{body:opts.body,requireInteraction:true,tag:opts.tag,renotify:true,icon:_SOS_ICON});}catch(e){}
+  try{new Notification('🆘 EMERGENZA SOS!',{body:opts.body,requireInteraction:true,tag:opts.tag,renotify:true,icon:_SOS_ICON,vibrate:opts.vibrate});}catch(e){}
 }
 
 // --- Ring continuo: ogni 4s finché non si ferma ---
@@ -2135,14 +2164,11 @@ function saveGroupSession(forceCreator){
   try{ existing=JSON.parse(localStorage.getItem('rfgrp_'+groupId)); }catch(e){}
   const isCreator=forceCreator===true?true:(existing?.isCreator||false);
   localStorage.setItem('rfgrp_'+groupId, JSON.stringify({
-    groupId, groupName:groupName||groupId,
-    myId, myName, myColor,
-    joinTs:myJoinTs,
-    isCreator,
+    groupId, groupName:groupName||groupId, myId, myName, myColor,
+    joinTs:myJoinTs, isCreator,
     expiresAt:groupMeta?.expiresAt||existing?.expiresAt||0
   }));
 }
-
 function updateGroupSessionExpiry(gid,expiresAt){
   if(!gid||!expiresAt) return;
   try{
@@ -2151,7 +2177,6 @@ function updateGroupSessionExpiry(gid,expiresAt){
     if(d){ d.expiresAt=expiresAt; d.groupName=groupName||d.groupName; localStorage.setItem(key,JSON.stringify(d)); }
   }catch(e){}
 }
-
 function loadMyGroups(){
   const now=Date.now();
   return Object.keys(localStorage)
@@ -2160,22 +2185,17 @@ function loadMyGroups(){
     .filter(d=>d&&d.groupId&&(d.expiresAt===0||d.expiresAt>now))
     .sort((a,b)=>(b.joinTs||0)-(a.joinTs||0));
 }
-
 function _fmtRemaining(ms){
   if(ms<=0) return 'Scaduto';
   const h=Math.floor(ms/3600000), m=Math.floor((ms%3600000)/60000);
   return h>=1?`${h}h ${m}m rimanenti`:`${m}m rimanenti`;
 }
-
 function renderMyGroups(){
   const card=document.getElementById('my-groups-card');
   const list=document.getElementById('my-groups-list');
   if(!card||!list) return;
   const groups=loadMyGroups();
-  if(!groups.length){
-    list.innerHTML='<div class="mg-empty">Nessun gruppo attivo salvato</div>';
-    return;
-  }
+  if(!groups.length){ list.innerHTML='<div class="mg-empty">Nessun gruppo attivo salvato</div>'; return; }
   const now=Date.now();
   list.innerHTML=groups.map(g=>{
     const rem=g.expiresAt>0?g.expiresAt-now:null;
@@ -2205,26 +2225,17 @@ function renderMyGroups(){
 </div>`;
   }).join('');
 }
-
 function _rejoinGroup(gid){
-  let d;
-  try{ d=JSON.parse(localStorage.getItem('rfgrp_'+gid)); }catch(e){}
+  let d; try{ d=JSON.parse(localStorage.getItem('rfgrp_'+gid)); }catch(e){}
   if(!d){ showToast('Dati gruppo non trovati'); return; }
-  groupId=d.groupId;
-  groupName=d.groupName||d.groupId;
-  myId=d.myId;
-  myName=d.myName;
-  myColor=d.myColor;
-  selColor=d.myColor;
-  myJoinTs=d.joinTs||Date.now();
-  _pendingCreator=false;
+  groupId=d.groupId; groupName=d.groupName||d.groupId;
+  myId=d.myId; myName=d.myName; myColor=d.myColor; selColor=d.myColor;
+  myJoinTs=d.joinTs||Date.now(); _pendingCreator=false;
   enterGroup();
 }
-
 function _leaveGroupFromLanding(gid){
   if(!confirm('Vuoi uscire e cancellare la tua presenza dal gruppo?')) return;
-  let d;
-  try{ d=JSON.parse(localStorage.getItem('rfgrp_'+gid)); }catch(e){}
+  let d; try{ d=JSON.parse(localStorage.getItem('rfgrp_'+gid)); }catch(e){}
   if(d&&d.myId){
     const cl=mqtt.connect(BROKER,{clientId:'fclv'+d.myId.slice(-6)+'_'+Date.now().toString(36),clean:true,reconnectPeriod:0,connectTimeout:6000});
     cl.on('connect',()=>{
@@ -2240,15 +2251,11 @@ function _leaveGroupFromLanding(gid){
     });
     cl.on('error',()=>cl.end());
   }
-  _cleanGroupLocal(gid);
-  showToast('Uscito dal gruppo');
-  _refreshMyGroupsUI(gid);
+  _cleanGroupLocal(gid); showToast('Uscito dal gruppo'); _refreshMyGroupsUI(gid);
 }
-
 function _deleteGroupFromLanding(gid){
   if(!confirm('Eliminare definitivamente il gruppo?\nTutti i membri perderanno l\'accesso.')) return;
-  let d;
-  try{ d=JSON.parse(localStorage.getItem('rfgrp_'+gid)); }catch(e){}
+  let d; try{ d=JSON.parse(localStorage.getItem('rfgrp_'+gid)); }catch(e){}
   if(d&&d.myId){
     const cl=mqtt.connect(BROKER,{clientId:'fcdel'+d.myId.slice(-6)+'_'+Date.now().toString(36),clean:true,reconnectPeriod:0,connectTimeout:6000});
     cl.on('connect',()=>{
@@ -2262,33 +2269,24 @@ function _deleteGroupFromLanding(gid){
         pins.filter(p=>p.ownerId===d.myId&&p.visibility!=='private')
           .forEach(p=>cl.publish(`fc/${gid}/pin/${p.id}`,e,{retain:true,qos:1}));
       }catch(ex){}
-      setTimeout(()=>{
-        cl.publish(`fc/${gid}/meta`,e,{retain:true,qos:1});
-        setTimeout(()=>cl.end(),400);
-      },600);
+      setTimeout(()=>{ cl.publish(`fc/${gid}/meta`,e,{retain:true,qos:1}); setTimeout(()=>cl.end(),400); },600);
     });
     cl.on('error',()=>cl.end());
   }
-  _cleanGroupLocal(gid);
-  showToast('Gruppo eliminato');
-  _refreshMyGroupsUI(gid);
+  _cleanGroupLocal(gid); showToast('Gruppo eliminato'); _refreshMyGroupsUI(gid);
 }
-
 function _cleanGroupLocal(gid){
   localStorage.removeItem('rfgrp_'+gid);
   localStorage.removeItem('rfid_'+gid);
   localStorage.removeItem('rfpins_'+gid);
 }
-
 function _refreshMyGroupsUI(gid){
   const item=document.getElementById('mgitem-'+gid);
   if(item) item.remove();
   const list=document.getElementById('my-groups-list');
-  if(list&&!list.children.length){
+  if(list&&!list.children.length)
     list.innerHTML='<div class="mg-empty">Nessun gruppo attivo salvato</div>';
-  }
 }
-
 </script>
 
 <!-- PIN MODAL -->
