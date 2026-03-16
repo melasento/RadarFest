@@ -555,7 +555,14 @@ function handleNameConflict(){
 // NAV
 // ══════════════════════════════════
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
-function goLanding(){show('s-landing');groupId=null;renderMyGroups();}
+function goLanding(){
+  ['expired-overlay','sos-perm-overlay','pin-overlay','gps-acquire'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.classList.remove('show');el.style.display='';}
+  });
+  document.getElementById('sos-banner').style.display='none';
+  show('s-landing');groupId=null;renderMyGroups();
+}
 function startCreate(){
   groupId=rndCode();
   groupName=document.getElementById('group-name-inp').value.trim()||('Gruppo '+groupId);
@@ -610,6 +617,7 @@ function enterGroup(){
   }
   // Chiedi permesso SOS ad OGNI entrata nel gruppo
   setTimeout(()=>{
+    if(!groupId) return; // utente già uscito dal gruppo
     try {
       const perm = ('Notification' in window) ? Notification.permission : 'unsupported';
       if(perm === 'granted'){
@@ -1239,7 +1247,12 @@ function leaveGroup(){
 
 // Reset completo → landing
 function hardReset(){
-  document.getElementById('expired-overlay').classList.remove('show');
+  // Rimuovi TUTTI gli overlay che potrebbero bloccare la landing
+  ['expired-overlay','sos-perm-overlay','pin-overlay','gps-acquire'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.classList.remove('show');el.style.display='';}
+  });
+  document.getElementById('sos-banner').style.display='none';
   groupId=null; groupMeta=null; _metaReceived=false; myName=''; myId=null;
   friends={}; predMap={}; smoothFriendPos={}; pins=[];
   show('s-landing');
