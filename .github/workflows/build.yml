@@ -38,7 +38,12 @@ jobs:
           mkdir -p radarfest-build/assets
           cp radarfest-src/icon.png radarfest-build/assets/icon.png
 
-      - name: Inject google-services plugin with version
+      - name: Patch Kotlin version and plugin id
+        run: |
+          sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '2.1.0'/" radarfest-build/android/build.gradle
+          sed -i "s/id 'kotlin-android'/id 'org.jetbrains.kotlin.android'/" radarfest-build/android/app/build.gradle
+
+      - name: Inject google-services plugin with version 4.4.0
         run: >
           awk
           '/^plugins[[:space:]]*\{/{print; print
@@ -61,4 +66,3 @@ jobs:
         with:
           name: radarfest-debug
           path: radarfest-build/build/app/outputs/flutter-apk/app-debug.apk
-          retention-days: 30
