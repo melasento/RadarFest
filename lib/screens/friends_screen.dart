@@ -39,18 +39,14 @@ class FriendsScreen extends StatelessWidget {
                 final friend = friends[index];
                 final myLat = me?.lat;
                 final myLon = me?.lon;
-                final friendLat = friend.lat;
-                final friendLon = friend.lon;
+                final fLat = friend.lat;
+                final fLon = friend.lon;
                 final distance =
-                    (myLat != null && myLon != null && friendLat != null && friendLon != null)
-                        ? LocationService.distanceBetween(
-                            myLat, myLon, friendLat, friendLon)
+                    (myLat != null && myLon != null && fLat != null && fLon != null)
+                        ? LocationService.distanceBetween(myLat, myLon, fLat, fLon)
                         : null;
-                final isRecent = DateTime.now()
-                        .difference(
-                            DateTime.fromMillisecondsSinceEpoch(friend.ts))
-                        .inSeconds <
-                    30;
+                final isRecent =
+                    DateTime.now().difference(friend.lastSeen).inSeconds < 30;
 
                 return ListTile(
                   leading: Container(
@@ -62,7 +58,7 @@ class FriendsScreen extends StatelessWidget {
                     ),
                     child: Center(
                       child: Text(
-                        friend.name[0].toUpperCase(),
+                        friend.initial,
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
