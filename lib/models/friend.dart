@@ -46,6 +46,12 @@ class Friend {
 
   bool get isStale =>
       DateTime.now().millisecondsSinceEpoch - ts > 90000;
+  
+  DateTime get lastSeen =>
+      DateTime.fromMillisecondsSinceEpoch(ts);
+
+  double? get heading => null;
+  String get shape => 'circle';
 
   String get initial => name.isNotEmpty ? name[0].toUpperCase() : '?';
 }
