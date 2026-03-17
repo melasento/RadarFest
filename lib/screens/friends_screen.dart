@@ -37,10 +37,11 @@ class FriendsScreen extends StatelessWidget {
               itemCount: friends.length,
               itemBuilder: (context, index) {
                 final friend = friends[index];
-                final distance = me != null
-                    ? LocationService.distanceBetween(
-                        me!.lat, me!.lon, friend.lat, friend.lon)
-                    : null;
+                final distance =
+                    (me != null && friend.lat != null && friend.lon != null)
+                        ? LocationService.distanceBetween(
+                            me!.lat, me!.lon, friend.lat!, friend.lon!)
+                        : null;
                 final isRecent = DateTime.now()
                         .difference(
                             DateTime.fromMillisecondsSinceEpoch(friend.ts))
