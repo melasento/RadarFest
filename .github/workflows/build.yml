@@ -35,10 +35,22 @@ jobs:
           cp radarfest-src/pubspec.yaml radarfest-build/pubspec.yaml
           cp radarfest-src/android/app/src/main/AndroidManifest.xml radarfest-build/android/app/src/main/AndroidManifest.xml
           cp radarfest-src/android/app/google-services.json radarfest-build/android/app/google-services.json
-          cp radarfest-src/android/app/build.gradle radarfest-build/android/app/build.gradle
-          cp radarfest-src/android/build.gradle radarfest-build/android/build.gradle
           mkdir -p radarfest-build/assets
           cp radarfest-src/icon.png radarfest-build/assets/icon.png
+
+      - name: Add google-services plugin to app build.gradle
+        working-directory: radarfest-build/android/app
+        run: |
+          python3 -c "
+import re
+with open('build.gradle', 'r') as f:
+    content = f.read()
+if 'com.google.gms.google-services' not in content:
+    content = content.replace('plugins {', \"plugins {\\n    id 'com.google.gms.google-services'\")
+with open('build.gradle', 'w') as f:
+    f.write(content)
+print('Done')
+"
 
       - name: Get dependencies
         working-directory: radarfest-build
