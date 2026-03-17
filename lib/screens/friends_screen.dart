@@ -42,7 +42,8 @@ class FriendsScreen extends StatelessWidget {
                         me!.lat, me!.lon, friend.lat, friend.lon)
                     : null;
                 final isRecent = DateTime.now()
-                        .difference(friend.lastSeen)
+                        .difference(
+                            DateTime.fromMillisecondsSinceEpoch(friend.ts))
                         .inSeconds <
                     30;
 
