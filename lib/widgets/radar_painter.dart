@@ -131,18 +131,23 @@ class RadarPainter extends CustomPainter {
   }
 
   void _drawFriends(Canvas canvas, Offset center, double radius) {
-    if (me == null) return;
-    final now = DateTime.now();
+    final myLat = me?.lat;
+    final myLon = me?.lon;
+    if (myLat == null || myLon == null) return;
 
+    final now = DateTime.now();
     for (final friend in friends) {
+      final fLat = friend.lat;
+      final fLon = friend.lon;
+      if (fLat == null || fLon == null) continue;
+
       final age = now.difference(friend.lastSeen).inSeconds;
       final opacity = age > 30 ? 0.3 : 1.0 - (age / 30) * 0.5;
 
-      final dist = _distanceBetween(me!.lat, me!.lon, friend.lat, friend.lon);
+      final dist = _distanceBetween(myLat, myLon, fLat, fLon);
       if (dist > radarRange) continue;
 
-      final bearing =
-          _bearingBetween(me!.lat, me!.lon, friend.lat, friend.lon);
+      final bearing = _bearingBetween(myLat, myLon, fLat, fLon);
       final relAngle = bearing - heading - pi / 2;
       final r = (dist / radarRange) * radius * 0.85;
       final pos = Offset(
@@ -152,7 +157,6 @@ class RadarPainter extends CustomPainter {
 
       final color = _hexToColor(friend.color).withOpacity(opacity);
       _drawShape(canvas, pos, 8, friend.shape, color);
-
       if (showNames) {
         _drawLabel(canvas, pos, friend.name, color);
       }
@@ -160,11 +164,9 @@ class RadarPainter extends CustomPainter {
   }
 
   void _drawSelf(Canvas canvas, Offset center, double radius) {
-    final selfColor = me != null
-        ? _hexToColor(me!.color)
-        : const Color(0xFF00aaff);
+    final selfColor =
+        me != null ? _hexToColor(me!.color) : const Color(0xFF00aaff);
     final selfShape = me?.shape ?? 'circle';
-
     _drawShape(canvas, center, 10, selfShape, selfColor);
 
     final dirPaint = Paint()
@@ -181,12 +183,15 @@ class RadarPainter extends CustomPainter {
   }
 
   void _drawPins(Canvas canvas, Offset center, double radius) {
-    if (me == null) return;
+    final myLat = me?.lat;
+    final myLon = me?.lon;
+    if (myLat == null || myLon == null) return;
+
     for (final pin in pins) {
-      final dist = _distanceBetween(me!.lat, me!.lon, pin.lat, pin.lon);
+      final dist = _distanceBetween(myLat, myLon, pin.lat, pin.lon);
       if (dist > radarRange) continue;
 
-      final bearing = _bearingBetween(me!.lat, me!.lon, pin.lat, pin.lon);
+      final bearing = _bearingBetween(myLat, myLon, pin.lat, pin.lon);
       final relAngle = bearing - heading - pi / 2;
       final r = (dist / radarRange) * radius * 0.85;
       final pos = Offset(
@@ -285,11 +290,11 @@ class RadarPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout();
     tp.paint(
-        canvas,
-        Offset(
-          pos.dx - tp.width / 2,
-          pos.dy + 12,
-        ));
+      canvas,
+      Offset(
+        pos.dx - tp.width / 2,
+        pos.dy + 12,
+      ));
   }
 
   double _distanceBetween(
