@@ -38,10 +38,15 @@ jobs:
           mkdir -p radarfest-build/assets
           cp radarfest-src/icon.png radarfest-build/assets/icon.png
 
-      - name: Inject google-services plugin
-        run: |
-          awk '/^plugins \{/{print; print "    id \047com.google.gms.google-services\047"; next}1' radarfest-build/android/app/build.gradle > /tmp/build.gradle.tmp
-          mv /tmp/build.gradle.tmp radarfest-build/android/app/build.gradle
+      - name: Inject google-services plugin with version
+        run: >
+          awk
+          '/^plugins[[:space:]]*\{/{print; print
+          "    id \047com.google.gms.google-services\047 version \0474.4.0\047";
+          next}1'
+          radarfest-build/android/app/build.gradle
+          > /tmp/build.gradle.tmp
+          && mv /tmp/build.gradle.tmp radarfest-build/android/app/build.gradle
 
       - name: Get dependencies
         working-directory: radarfest-build
