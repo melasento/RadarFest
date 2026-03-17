@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "801607785762",
+    "project_id": "radar-fest-349ba",
+    "storage_bucket": "radar-fest-349ba.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:801607785762:android:0117a64d5ae3f06323997b",
+        "android_client_info": {
+          "package_name": "com.melasento.radarfest"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAinIbhi5NIV9HaNHzkjhq_DiBZY__ln_Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
