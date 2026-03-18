@@ -33,8 +33,12 @@ jobs:
         run: |
           cp -r radarfest-src/lib radarfest-build/
           cp radarfest-src/pubspec.yaml radarfest-build/pubspec.yaml
+          mkdir -p radarfest-build/assets
           if [ -d radarfest-src/assets ]; then
-            cp -r radarfest-src/assets radarfest-build/
+            cp -r radarfest-src/assets/. radarfest-build/assets/
+          fi
+          if [ -f radarfest-src/icon.png ]; then
+            cp radarfest-src/icon.png radarfest-build/assets/icon.png
           fi
 
       - name: Get dependencies
