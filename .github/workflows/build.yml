@@ -29,6 +29,11 @@ jobs:
       - name: Create Flutter project scaffold
         run: flutter create --org com.melasento --project-name radarfest radarfest-build
 
+      - name: Fix Kotlin version in android/build.gradle
+        run: |
+          sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '2.1.0'/" radarfest-build/android/build.gradle || true
+          grep -q 'ext.kotlin_version' radarfest-build/android/build.gradle || sed -i '/buildscript {/a\    ext.kotlin_version = '\''2.1.0'\''' radarfest-build/android/build.gradle
+
       - name: Copy source files
         run: |
           cp -r radarfest-src/lib radarfest-build/
