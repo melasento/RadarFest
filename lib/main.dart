@@ -36,8 +36,47 @@ class RadarFestApp extends StatelessWidget {
   }
 }
 
-class LandingScreen extends StatelessWidget {
+class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
+
+  @override
+  State<LandingScreen> createState() => _LandingScreenState();
+}
+
+class _LandingScreenState extends State<LandingScreen> {
+  final TextEditingController _createNameController = TextEditingController();
+  final TextEditingController _joinCodeController = TextEditingController();
+
+  void _createGroup() {
+    final name = _createNameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Inserisci un nome per il gruppo')),
+      );
+      return;
+    }
+    // Per ora facciamo solo un passaggio a una schermata mock o print
+    print('Creazione gruppo: $name');
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => RadarScreen(title: name, code: 'GNL8U7')),
+    );
+  }
+
+  void _joinGroup() {
+    final code = _joinCodeController.text.trim().toUpperCase();
+    if (code.length < 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Inserisci un codice valido')),
+      );
+      return;
+    }
+    print('Unione al gruppo: $code');
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => RadarScreen(title: 'Gruppo $code', code: code)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -94,6 +133,7 @@ class LandingScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     TextField(
+                      controller: _createNameController,
                       decoration: InputDecoration(
                         hintText: 'Nome gruppo (es. Gita Roma)',
                         hintStyle: const TextStyle(color: Color(0xFF4a7a99)),
@@ -115,7 +155,7 @@ class LandingScreen extends StatelessWidget {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () {},
+                        onPressed: _createGroup,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF00e87a),
                           foregroundColor: Colors.black,
@@ -157,6 +197,7 @@ class LandingScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     TextField(
+                      controller: _joinCodeController,
                       decoration: InputDecoration(
                         hintText: 'Codice (es. GNL8U7)',
                         hintStyle: const TextStyle(color: Color(0xFF4a7a99)),
@@ -179,7 +220,7 @@ class LandingScreen extends StatelessWidget {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () {},
+                        onPressed: _joinGroup,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF0077cc),
                           foregroundColor: Colors.white,
@@ -209,6 +250,59 @@ class LandingScreen extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class RadarScreen extends StatelessWidget {
+  final String title;
+  final String code;
+
+  const RadarScreen({super.key, required this.title, required this.code});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF02040A),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF07111f),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text('Codice: $code', style: const TextStyle(fontSize: 12, color: Color(0xFF00c0ff))),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_none, color: Color(0xFF00c0ff)),
+            onPressed: () {},
+          ),
+        ],
+      ),
+      body: Center(
+        child: Text(
+          'Radar Placeholder
+UI in fase di sviluppo',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Color(0xFF4a7a99)),
+        ),
+      ),
+      bottomNavigationBar: Container(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 8, left: 12, right: 12, top: 8),
+        color: const Color(0xFF050A14),
+        child: ElevatedButton(
+          onPressed: () {},
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFFF3344),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 13),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, letterSpacing: 1),
+          ),
+          child: const Text('\u26A0 EMERGENZA SOS'),
         ),
       ),
     );
