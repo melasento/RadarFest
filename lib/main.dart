@@ -283,8 +283,7 @@ class RadarScreen extends StatelessWidget {
       ),
       body: const Center(
         child: Text(
-          'Radar Placeholder
-UI in fase di sviluppo',
+          'Radar Placeholder UI in fase di sviluppo',
           textAlign: TextAlign.center,
           style: TextStyle(color: Color(0xFF4a7a99)),
         ),
