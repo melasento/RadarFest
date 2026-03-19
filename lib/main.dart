@@ -55,7 +55,6 @@ class _LandingScreenState extends State<LandingScreen> {
       );
       return;
     }
-    // Per ora facciamo solo un passaggio a una schermata mock o print
     print('Creazione gruppo: $name');
     Navigator.push(
       context,
@@ -282,7 +281,7 @@ class RadarScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Center(
+      body: const Center(
         child: Text(
           'Radar Placeholder
 UI in fase di sviluppo',
