@@ -1187,10 +1187,13 @@ function startGroupTimer(){
 // Estende di 24h (solo creatore)
 function extendGroup(){
   if(!groupMeta || groupMeta.creatorId !== myId){
-    showToast('⚠️ Solo il creatore può estendere il gruppo'); return;
+    showToast('⚠️ Solo il creatore può estendere il gruppo');
+    return;
   }
-  groupMeta.expiresAt = Date.now() + GROUP_DURATION;
+  const baseExpiry = Math.max(groupMeta.expiresAt || 0, Date.now());
+  groupMeta.expiresAt = baseExpiry + GROUP_DURATION;
   publishGroupMeta(groupMeta);
+  applyGroupMeta({...groupMeta});
   showToast('✅ Gruppo esteso di altre 24 ore!');
 }
 
