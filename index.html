@@ -381,7 +381,7 @@ body{transition:filter .3s;}
 
 
 
-<div id="warn"><span>⚠️ Un amico si è allontanato oltre 2km!</span><button onclick="dismissWarn()" style="background:transparent;border:1px solid #fff8;color:#fff;border-radius:6px;padding:2px 10px;font-size:12px;font-weight:700;cursor:pointer;margin-left:12px;font-family:inherit">✕</button></div>
+
 <div id="toast"></div>
 
 <script>
@@ -1164,36 +1164,33 @@ function applyGroupMeta(data){
 // Timer countdown
 function startGroupTimer(){
   if(_timerIv) clearInterval(_timerIv);
-  const render = ()=>{
+  _timerIv = setInterval(()=>{
     if(!groupMeta) return;
     const rem = groupMeta.expiresAt - Date.now();
+    if(rem <= 0){ clearInterval(_timerIv); triggerGroupExpiry(true); return; }
     const el = document.getElementById('grp-timer');
     if(!el) return;
-    if(rem <= 0){ clearInterval(_timerIv); triggerGroupExpiry(true); return; }
-    const h = Math.floor(rem / 3600000);
-    const m = Math.floor((rem % 3600000) / 60000);
-    const s = Math.floor((rem % 60000) / 1000);
-    const warn = rem < 600000;
-    const isCreator = groupMeta.creatorId === myId;
-    el.style.display = 'flex';
-    el.className = 'grp-timer' + (warn ? ' warn' : '');
-    el.innerHTML = '⏱ ' + String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0')
-      + (isCreator ? '<button class="ext-btn" onclick="extendGroup()">+24h</button>' : '');
-  };
-  render();
-  _timerIv = setInterval(render, 1000);
+    if(rem <= 3600000){ // < 1 ora: mostra timer
+      el.style.display = 'flex';
+      const m = Math.floor(rem/60000), s = Math.floor((rem%60000)/1000);
+      const warn = rem < 600000; // < 10 min: pulsante estendi
+      const isCreator = groupMeta.creatorId === myId;
+      el.className = warn ? 'warn' : '';
+      el.innerHTML = '⏱ ' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0')
+        + (isCreator ? '<button class="ext-btn" onclick="extendGroup()">+24h</button>' : '');
+    } else {
+      el.style.display = 'none';
+    }
+  }, 1000);
 }
 
 // Estende di 24h (solo creatore)
 function extendGroup(){
   if(!groupMeta || groupMeta.creatorId !== myId){
-    showToast('⚠️ Solo il creatore può estendere il gruppo');
-    return;
+    showToast('⚠️ Solo il creatore può estendere il gruppo'); return;
   }
-  const baseExpiry = Math.max(groupMeta.expiresAt || 0, Date.now());
-  groupMeta.expiresAt = baseExpiry + GROUP_DURATION;
+  groupMeta.expiresAt = Date.now() + GROUP_DURATION;
   publishGroupMeta(groupMeta);
-  applyGroupMeta(groupMeta);
   showToast('✅ Gruppo esteso di altre 24 ore!');
 }
 
@@ -1810,29 +1807,10 @@ document.addEventListener('click',e=>{
 // SEPARAZIONE
 // ══════════════════════════════════
 let warnDismissed=false;
-function dismissWarn(){warnDismissed=true;document.getElementById('warn').classList.remove('show');}
-const sepNotified={};  // tiene traccia di chi ha già ricevuto notifica
+function dismissWarn(){warnDismissed=true;}
+const sepNotified={};
 function checkSep(){
-  if(myLat===null)return;
-  let w=false;
-  Object.values(friends).forEach(f=>{
-    if(!f.lat)return;
-    const {dist,bearing}=distBear(myLat,myLon,f.lat,f.lon);
-    if(dist>SEP_THR){
-      w=true;
-      if(!sepNotified[f.id]){
-        sepNotified[f.id]=true;
-        const dir=cardinal(bearing);
-        const km=(dist/1000).toFixed(1);
-        addNotification(`📍 ${f.name||'Amico'} si è allontanato — ${km}km a ${dir}`,new Date());
-      }
-    } else {
-      sepNotified[f.id]=false;  // reset: potrà notificare di nuovo se si riallontana
-    }
-  });
-  if(!w) warnDismissed=false;
-  if(!warnDismissed) document.getElementById('warn').classList.toggle('show',w);
-  if(w&&!warnDismissed&&navigator.vibrate)navigator.vibrate([200,100,200]);
+  return;
 }
 
 // ══════════════════════════════════
