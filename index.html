@@ -1164,24 +1164,24 @@ function applyGroupMeta(data){
 // Timer countdown
 function startGroupTimer(){
   if(_timerIv) clearInterval(_timerIv);
-  _timerIv = setInterval(()=>{
+  const render = ()=>{
     if(!groupMeta) return;
     const rem = groupMeta.expiresAt - Date.now();
-    if(rem <= 0){ clearInterval(_timerIv); triggerGroupExpiry(true); return; }
     const el = document.getElementById('grp-timer');
     if(!el) return;
-    if(rem <= 3600000){ // < 1 ora: mostra timer
-      el.style.display = 'flex';
-      const m = Math.floor(rem/60000), s = Math.floor((rem%60000)/1000);
-      const warn = rem < 600000; // < 10 min: pulsante estendi
-      const isCreator = groupMeta.creatorId === myId;
-      el.className = warn ? 'warn' : '';
-      el.innerHTML = '⏱ ' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0')
-        + (isCreator ? '<button class="ext-btn" onclick="extendGroup()">+24h</button>' : '');
-    } else {
-      el.style.display = 'none';
-    }
-  }, 1000);
+    if(rem <= 0){ clearInterval(_timerIv); triggerGroupExpiry(true); return; }
+    const h = Math.floor(rem / 3600000);
+    const m = Math.floor((rem % 3600000) / 60000);
+    const s = Math.floor((rem % 60000) / 1000);
+    const warn = rem < 600000;
+    const isCreator = groupMeta.creatorId === myId;
+    el.style.display = 'flex';
+    el.className = 'grp-timer' + (warn ? ' warn' : '');
+    el.innerHTML = '⏱ ' + String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0')
+      + (isCreator ? '<button class="ext-btn" onclick="extendGroup()">+24h</button>' : '');
+  };
+  render();
+  _timerIv = setInterval(render, 1000);
 }
 
 // Estende di 24h (solo creatore)
@@ -1193,7 +1193,7 @@ function extendGroup(){
   const baseExpiry = Math.max(groupMeta.expiresAt || 0, Date.now());
   groupMeta.expiresAt = baseExpiry + GROUP_DURATION;
   publishGroupMeta(groupMeta);
-  applyGroupMeta({...groupMeta});
+  applyGroupMeta(groupMeta);
   showToast('✅ Gruppo esteso di altre 24 ore!');
 }
 
