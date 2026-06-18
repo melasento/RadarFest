@@ -1334,7 +1334,7 @@ function loop(t){
   const dt=Math.min((t-prevT)/1000,0.1);prevT=t;
   const idle=Date.now()-lastInteract>10000;  // idle dopo 10s
   if(idle&&(t%33)>16.5){requestAnimationFrame(loop);return;}  // ~30fps se idle
-  sweepAngle+=dt*0.3;
+  sweepAngle+=dt*0.45;
   compassHeading=lerpAngle(compassHeading,rawHeading,Math.min(1,dt*15));
   draw();
   requestAnimationFrame(loop);
