@@ -564,7 +564,7 @@ function startCreate(){
   buildPicker();show('s-name');
   setTimeout(()=>document.getElementById('name-inp').focus(),80);
 }
-var _pendingCreator=false; // flag: questo client ha creato il gruppo
+let _pendingCreator=false; // flag: questo client ha creato il gruppo
 function startJoin(){
   const c=document.getElementById('code-inp').value.trim().toUpperCase();
   if(c.length<4){showToast('⚠️ Codice non valido');return;}
@@ -780,7 +780,7 @@ if(pAge<600){
     const nm=f.name||'?'…'?',ds=(dist>=1000?(Math.round(dist/100)/10)+'km':(dist?(Math.round(dist/100)/10)+'km':Math.round(dist)+'m'));
     ctx.font='bold 11px sans-serif';
     const tw=Math.max(ctx.measureText(nm).width,ctx.measureText(ds).width)+10;
-    const th=28,lx=fx<cx?fx-tw-6:fx+14,ly=fy-10;
+    const th=28;let lx=fx<cx?fx-tw-6:fx+14,ly=fy-10;lx=Math.max(cx-R+4,Math.min(cx+R-tw-4,lx));ly=Math.max(cy-R+4,Math.min(cy+R-th-4,ly));
     ctx.fillStyle='rgba(2,4,14,0.82)';ctx.fillRect(lx-2,ly,tw+2,th);
     ctx.fillStyle='#ffffffee';ctx.font='bold 11px sans-serif';ctx.textAlign='left';ctx.fillText(nm,lx,ly+13);
     ctx.fillStyle=fc;ctx.font='10px sans-serif';ctx.fillText(ds,lx,ly+25);
@@ -834,7 +834,7 @@ if(pAge<600){
       ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
       ctx.restore();
       // Label
-      const ds2 = (dist>=1000?(Math.round(dist/100)/10)+'km':(dist>=1000?(Math.round(dist/100)/10)+'km':Math.round(dist)+'m'));
+      const ds2 = (dist>=1000?(Math.round(dist/100)/10)+'km':Math.round(dist)+'m');
       ctx.font = 'bold 10px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
       const tw2 = Math.max(ctx.measureText(p.name).width, ctx.measureText(ds2).width)+8;
       ctx.fillStyle='rgba(2,4,14,0.85)'; ctx.fillRect(px2-tw2/2,py2+18,tw2,22);
@@ -1773,7 +1773,7 @@ function buildPosString(){
   if(myLat!==null){
     const{dist,bearing}=distBear(myLat,myLon,sosFromPos.lat,sosFromPos.lon);
     const age=Math.round((Date.now()-(sosFromPos.ts||0))/1000);
-    return cardinal(bearing)+' · '+(dist>=1000?(Math.round(dist/100)/10)+'km':(dist>=1000?(Math.round(dist/100)/10)+'km':Math.round(dist)+'m'))+(age>30?' ('+age+'s fa)':'');
+    return cardinal(bearing)+' · '+(dist>=1000?(Math.round(dist/100)/10)+'km':Math.round(dist)+'m')+(age>30?' ('+age+'s fa)':'');
   }
   // Altrimenti coordinate grezze
   return sosFromPos.lat.toFixed(5)+', '+sosFromPos.lon.toFixed(5);
