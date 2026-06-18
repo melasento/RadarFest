@@ -640,7 +640,7 @@ const ctx=cv.getContext('2d');
 let sweepAngle=0;
 let prevSweepAngle=0;
 const friendPulse={};
-function fixCanvas(){
+function fixCanvas(){const cv2=document.getElementById('cv');cv2.style.width='';cv2.style.height='';cv2.style.top='50%';cv2.style.left='50%';cv2.style.transform='translate(-50%,-50%)';const cv2=document.getElementById('cv');cv2.style.width='';cv2.style.height='';cv2.style.top='50%';cv2.style.left='50%';cv2.style.transform='translate(-50%,-50%)';
   const w=document.getElementById('radar-wrap');
   const s=Math.min(w.offsetWidth,w.offsetHeight);cv.width=s;cv.height=s;
 }
