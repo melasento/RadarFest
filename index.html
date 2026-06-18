@@ -642,7 +642,7 @@ let prevSweepAngle=0;
 const friendPulse={};
 function fixCanvas(){
   const w=document.getElementById('radar-wrap');
-  cv.width=w.offsetWidth;cv.height=w.offsetHeight;
+  const s=Math.min(w.offsetWidth,w.offsetHeight);cv.width=s;cv.height=s;
 }
 window.addEventListener('resize',fixCanvas);
 
