@@ -1222,7 +1222,7 @@ function selfDestructClean(){
     // Se creatore, cancella anche meta e segnala scadenza
     if(groupMeta && groupMeta.creatorId === myId){
       mqttClient.publish(`fc/${groupId}/meta`,
-        JSON.stringify({expired:true, expiresAt:0}), {retain:true, qos:1, properties:{messageExpiryInterval:3600}});
+        JSON.stringify({expired:true, expiresAt:0}), {retain:true, qos:1, properties:{messageExpiryInterval:86400}});
       setTimeout(()=>{
         mqttClient.publish(`fc/${groupId}/meta`, e, {retain:true,qos:1});
       }, 500);
@@ -2311,7 +2311,7 @@ function _deleteGroupFromLanding(gid){
         pins.filter(p=>p.ownerId===d.myId&&p.visibility!=='private')
           .forEach(p=>cl.publish(`fc/${gid}/pin/${p.id}`,e,{retain:true,qos:1}));
       }catch(ex){}
-      setTimeout(()=>{ cl.publish(`fc/${gid}/meta`,e,{retain:true,qos:1}); setTimeout(()=>cl.end(),400); },600);
+      setTimeout(()=>cl.end(),600);
     });
     cl.on('error',()=>cl.end());
   }
