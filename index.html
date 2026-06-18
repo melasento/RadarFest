@@ -777,7 +777,7 @@ if(pAge<600){
     const ar=d2r(bearing-compassHeading)-Math.PI/2;
     const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
     const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>90000?col+'88':col; // stale=90s, mantieni colore ma semitrasparente
-    const nm=f.name||'?'…':nmRaw'?',ds=(dist>=1000?(Math.round(dist/100)/10)+'km':(dist>=1000?(Math.round(dist/100)/10)+'km':Math.round(dist)+'m'));
+    const nm=f.name||'?'…'?',ds=(dist>=1000?(Math.round(dist/100)/10)+'km':(dist>=1000?(Math.round(dist/100)/10)+'km':Math.round(dist)+'m'));
     ctx.font='bold 11px sans-serif';
     const tw=Math.max(ctx.measureText(nm).width,ctx.measureText(ds).width)+10;
     const th=28,lx=fx<cx?fx-tw-6:fx+14,ly=fy-10;
