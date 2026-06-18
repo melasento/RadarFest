@@ -564,7 +564,7 @@ function startCreate(){
   buildPicker();show('s-name');
   setTimeout(()=>document.getElementById('name-inp').focus(),80);
 }
-let _pendingCreator=false; // flag: questo client ha creato il gruppo
+var _pendingCreator=false; // flag: questo client ha creato il gruppo
 function startJoin(){
   const c=document.getElementById('code-inp').value.trim().toUpperCase();
   if(c.length<4){showToast('⚠️ Codice non valido');return;}
