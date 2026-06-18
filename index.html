@@ -777,10 +777,10 @@ if(pAge<600){
     const ar=d2r(bearing-compassHeading)-Math.PI/2;
     const fx=cx+r*Math.cos(ar),fy=cy+r*Math.sin(ar);
     const col=f.color||'#00c0ff';const fc=(now-(f.ts||0))>90000?col+'88':col; // stale=90s, mantieni colore ma semitrasparente
-    const nm=f.name||'?'…'?',ds=(dist>=1000?(Math.round(dist/100)/10)+'km':(dist?(Math.round(dist/100)/10)+'km':Math.round(dist)+'m'));
+    const nm=f.name||'?',ds=(dist>=1000?(Math.round(dist/100)/10)+'km':(dist>=1000?(Math.round(dist/100)/10)+'km':Math.round(dist)+'m'));
     ctx.font='bold 11px sans-serif';
     const tw=Math.max(ctx.measureText(nm).width,ctx.measureText(ds).width)+10;
-    const th=28;let lx=fx<cx?fx-tw-6:fx+14,ly=fy-10;lx=Math.max(cx-R+4,Math.min(cx+R-tw-4,lx));ly=Math.max(cy-R+4,Math.min(cy+R-th-4,ly));
+    const th=28,lx=fx<cx?fx-tw-6:fx+14,ly=fy-10;
     ctx.fillStyle='rgba(2,4,14,0.82)';ctx.fillRect(lx-2,ly,tw+2,th);
     ctx.fillStyle='#ffffffee';ctx.font='bold 11px sans-serif';ctx.textAlign='left';ctx.fillText(nm,lx,ly+13);
     ctx.fillStyle=fc;ctx.font='10px sans-serif';ctx.fillText(ds,lx,ly+25);
@@ -834,7 +834,7 @@ if(pAge<600){
       ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
       ctx.restore();
       // Label
-      const ds2 = (dist>=1000?(Math.round(dist/100)/10)+'km':Math.round(dist)+'m');
+      const ds2 = (dist>=1000?(Math.round(dist/100)/10)+'km':(dist>=1000?(Math.round(dist/100)/10)+'km':Math.round(dist)+'m'));
       ctx.font = 'bold 10px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
       const tw2 = Math.max(ctx.measureText(p.name).width, ctx.measureText(ds2).width)+8;
       ctx.fillStyle='rgba(2,4,14,0.85)'; ctx.fillRect(px2-tw2/2,py2+18,tw2,22);
@@ -913,7 +913,7 @@ prevSweepAngle=sweepAngle;
 // ══════════════════════════════════
 function updateZoomUI(){
   const lbl=document.getElementById('zoom-lbl');
-  if(lbl) lbl.textContent=MAX_R+' m';
+  if(lbl) lbl.textContent=MAX_R+' m';
   const btnIn=document.getElementById('zoom-in');
   const btnOut=document.getElementById('zoom-out');
   if(btnIn)  btnIn.classList.toggle('at-limit', zoomIdx>=ZOOM_LEVELS.length-1);
@@ -1222,7 +1222,7 @@ function selfDestructClean(){
     // Se creatore, cancella anche meta e segnala scadenza
     if(groupMeta && groupMeta.creatorId === myId){
       mqttClient.publish(`fc/${groupId}/meta`,
-        JSON.stringify({expired:true, expiresAt:0}), {retain:true, qos:1, properties:{messageExpiryInterval:86400}});
+        JSON.stringify({expired:true, expiresAt:0}), {retain:true, qos:1, properties:{messageExpiryInterval:3600}});
       setTimeout(()=>{
         mqttClient.publish(`fc/${groupId}/meta`, e, {retain:true,qos:1});
       }, 500);
@@ -1773,7 +1773,7 @@ function buildPosString(){
   if(myLat!==null){
     const{dist,bearing}=distBear(myLat,myLon,sosFromPos.lat,sosFromPos.lon);
     const age=Math.round((Date.now()-(sosFromPos.ts||0))/1000);
-    return cardinal(bearing)+' · '+(dist>=1000?(Math.round(dist/100)/10)+'km':Math.round(dist)+'m')+(age>30?' ('+age+'s fa)':'');
+    return cardinal(bearing)+' · '+(dist>=1000?(Math.round(dist/100)/10)+'km':(dist>=1000?(Math.round(dist/100)/10)+'km':Math.round(dist)+'m'))+(age>30?' ('+age+'s fa)':'');
   }
   // Altrimenti coordinate grezze
   return sosFromPos.lat.toFixed(5)+', '+sosFromPos.lon.toFixed(5);
@@ -2311,7 +2311,7 @@ function _deleteGroupFromLanding(gid){
         pins.filter(p=>p.ownerId===d.myId&&p.visibility!=='private')
           .forEach(p=>cl.publish(`fc/${gid}/pin/${p.id}`,e,{retain:true,qos:1}));
       }catch(ex){}
-      setTimeout(()=>cl.end(),600);
+      setTimeout(()=>{ cl.publish(`fc/${gid}/meta`,e,{retain:true,qos:1}); setTimeout(()=>cl.end(),400); },600);
     });
     cl.on('error',()=>cl.end());
   }
