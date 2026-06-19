@@ -44,7 +44,7 @@ body{display:flex;flex-direction:column}
 .sw.sel{border-color:#fff;transform:scale(1.18)}
 /* TOPBAR */
 #topbar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--bg2);
-        border-bottom:1px solid var(--ring);flex-shrink:0}
+        border-bottom:1px solid var(--ring);flex-shrink:0;overflow:hidden}
 .gdot{width:8px;height:8px;border-radius:50%;background:#444;transition:all .4s;flex-shrink:0}
 .gdot.wait{background:#f0c000;box-shadow:0 0 6px #f0c000;animation:blink 1.2s infinite}
 .gdot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
@@ -56,7 +56,7 @@ body{display:flex;flex-direction:column}
 .cbdg{font-size:11px;color:var(--cyan);background:#0a1a2a;border:1px solid #1a3a4a;
       padding:2px 8px;border-radius:8px;letter-spacing:1.5px;cursor:pointer;flex-shrink:0}
 .mct{font-size:11px;color:var(--green);flex-shrink:0}
-.tacts{display:flex;gap:4px;flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch;min-width:0;scrollbar-width:none}
+.tacts{display:flex;gap:4px;flex-shrink:1;overflow-x:auto;-webkit-overflow-scrolling:touch;min-width:0;scrollbar-width:none}
       .tacts::-webkit-scrollbar{display:none}
 .tbtn{width:32px;height:32px;border-radius:50%;border:none;cursor:pointer;font-size:15px;
       background:var(--bg3);color:var(--text);display:flex;align-items:center;justify-content:center;position:relative}
