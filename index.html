@@ -56,7 +56,8 @@ body{display:flex;flex-direction:column}
 .cbdg{font-size:11px;color:var(--cyan);background:#0a1a2a;border:1px solid #1a3a4a;
       padding:2px 8px;border-radius:8px;letter-spacing:1.5px;cursor:pointer;flex-shrink:0}
 .mct{font-size:11px;color:var(--green);flex-shrink:0}
-.tacts{display:flex;gap:4px;flex-shrink:0}
+.tacts{display:flex;gap:4px;flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch;min-width:0;scrollbar-width:none}
+      .tacts::-webkit-scrollbar{display:none}
 .tbtn{width:32px;height:32px;border-radius:50%;border:none;cursor:pointer;font-size:15px;
       background:var(--bg3);color:var(--text);display:flex;align-items:center;justify-content:center;position:relative}
 .tbtn.g{background:#00c06033;color:var(--green)}
